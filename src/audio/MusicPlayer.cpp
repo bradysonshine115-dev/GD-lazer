@@ -97,8 +97,10 @@ void MusicPlayer::rebuildPlaylist() {
         std::string file = LevelTools::getAudioFileName(audio);
         auto path = CCFileUtils::sharedFileUtils()->fullPathForFilename(file.c_str(), false);
         if (path.empty() || !CCFileUtils::sharedFileUtils()->isFileExist(path)) continue;
+        // Played by bare file name, like GD does: on Android the full path is
+        // "assets/...", which FMOD can't open.
         tracks.push_back({
-            id, path, LevelTools::getAudioTitle(audio),
+            id, file, LevelTools::getAudioTitle(audio),
             LevelTools::nameForArtist(LevelTools::artistForAudio(audio)), {},
         });
     }

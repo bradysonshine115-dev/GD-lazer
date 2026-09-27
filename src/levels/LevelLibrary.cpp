@@ -52,8 +52,9 @@ namespace {
             int track = level->m_audioTrack;
             e.songTitle = LevelTools::getAudioTitle(track);
             e.songArtist = LevelTools::nameForArtist(LevelTools::artistForAudio(track));
-            std::string file = LevelTools::getAudioFileName(track);
-            e.songPath = CCFileUtils::sharedFileUtils()->fullPathForFilename(file.c_str(), false);
+            // Bare file name, like GD plays it: on Android the full path is
+            // "assets/...", which FMOD can't open.
+            e.songPath = LevelTools::getAudioFileName(track);
         }
     }
 

@@ -221,10 +221,16 @@ void NowPlayingOverlay::onTrackChanged(MusicPlayer::Track const* track, MusicPla
     setText(m_artist, track->artist.empty() ? "Unknown artist" : track->artist);
 
     Ref<NowPlayingOverlay> self = this;
-    thumbnails::fetchFirst(track->levelIDs(), [self, generation, direction](CCTexture2D* texture, int) {
+    auto show = [self, generation, direction](CCTexture2D* texture) {
         if (self->m_generation != generation) return;
         self->showBackground(texture, direction);
-    });
+    };
+    if (track->songID < 0) {
+        // A main level's song: that level's screenshot (level N uses audio track N - 1).
+        thumbnails::fetchOfficial(-track->songID, show);
+        return;
+    }
+    thumbnails::fetchFirst(track->levelIDs(), [show](CCTexture2D* texture, int) { show(texture); });
 }
 
 void NowPlayingOverlay::showBackground(CCTexture2D* texture, MusicPlayer::Direction direction) {
