@@ -28,8 +28,8 @@ namespace {
     bool g_enabled = false;
 
     bool settingEnabled() { return Mod::get()->getSettingValue<bool>("custom-cursor"); }
-
     constexpr float BASE_SCALE = 0.15f;              // Cursor.base_scale
+    constexpr float TILT_MAX = 30.f;                 // degrees, moving tilt
     constexpr ccColor3B PINK {255, 102, 170};        // OsuColour.Pink
     // The arrow's tip in the (unpadded) 312 x 442 texture: the click point.
     constexpr float TIP_X = 16.f, TIP_Y = 6.f, TEX_W = 312.f, TEX_H = 442.f;
@@ -140,15 +140,36 @@ namespace {
                 }
             }
 
+            // Tilt while moving (ours, not osu!'s): the arrow hangs from its tip and
+            // its body swings back against the motion, more the faster it goes.
+            // Stiffer than the drag rotation, and off while that's turning it.
+            if (m_hasPos && ms > 0 && inside) {
+                CCPoint v = (pos - m_lastPos) * pxPerPoint / dt; // px/s, y up
+                m_velocity = CCPoint(damp(m_velocity.x, v.x, 0.9, ms), damp(m_velocity.y, v.y, 0.9, ms));
+            }
+            float tiltTarget = 0;
+            bool tilting = Mod::get()->getSettingValue<bool>("cursor-rotation") && m_drag != Drag::Rotating && m_visible;
+            if (tilting) {
+                // Torque from the drag on the body (tip -> middle of the arrow, y down):
+                // positive = clockwise, like cocos rotation.
+                constexpr float BODY_X = 0.6f, BODY_Y = 0.8f;
+                float vx = m_velocity.x, vyDown = -m_velocity.y;
+                float torque = BODY_X * -vyDown - BODY_Y * -vx;
+                // ~13 degrees at 1000 px/s, easing off towards 30.
+                tiltTarget = TILT_MAX * std::tanh(torque * 0.015f / TILT_MAX);
+            }
+            m_tilt = damp(m_tilt, tiltTarget, 0.97, ms);
+
             for (auto t : {&m_alpha, &m_scale, &m_press, &m_rotation, &m_glow}) t->update(dt);
 
             this->setPosition(pos);
             m_lastPos = pos;
+            m_hasPos = inside;
             float size = static_cast<float>(Mod::get()->getSettingValue<double>("cursor-size"));
             // osu! draws it in screen pixels: texture pixels x base scale x size.
             float scale = BASE_SCALE * size * CC_CONTENT_SCALE_FACTOR() / pxPerPoint;
             m_holder->setScale(scale * m_scale.get() * m_press.get());
-            m_holder->setRotation(m_rotation.get());
+            m_holder->setRotation(m_rotation.get() + m_tilt);
             auto alpha = static_cast<GLubyte>(std::clamp(m_alpha.get(), 0.f, 1.f) * 255);
             m_base->setOpacity(alpha);
             m_additive->setOpacity(static_cast<GLubyte>(std::clamp(m_glow.get() * m_alpha.get(), 0.f, 1.f) * 255));
@@ -211,6 +232,9 @@ namespace {
         bool m_down = false;
         Drag m_drag = Drag::None;
         CCPoint m_downPx, m_lastMovePx, m_lastPos;
+        bool m_hasPos = false;
+        CCPoint m_velocity;
+        float m_tilt = 0;
     };
 }
 

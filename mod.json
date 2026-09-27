@@ -273,8 +273,8 @@
 		},
 		"cursor-rotation": {
 			"type": "bool",
-			"name": "Rotate cursor when dragging",
-			"description": "The osu! cursor turns to follow the mouse while you drag.",
+			"name": "Cursor rotation",
+			"description": "The osu! cursor tilts as it moves and turns to follow the mouse while you drag.",
 			"default": true,
 			"platforms": ["win"]
 		}

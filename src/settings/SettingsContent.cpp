@@ -189,7 +189,7 @@ void buildSettings(SettingsOverlay* overlay, MenuLayer* menu, MenuBackground* ba
     cursorSizeRow->setShownIf([mod] { return mod->getSettingValue<bool>("custom-cursor"); });
     overlay->addRow(cursorSizeRow);
     auto cursorRotateRow = ToggleRow::create(
-        "Rotate cursor when dragging", w, k,
+        "Cursor rotation", w, k,
         [mod] { return mod->getSettingValue<bool>("cursor-rotation"); },
         [mod] {
             bool v = !mod->getSettingValue<bool>("cursor-rotation");
@@ -197,6 +197,7 @@ void buildSettings(SettingsOverlay* overlay, MenuLayer* menu, MenuBackground* ba
             return v;
         }
     );
+    cursorRotateRow->setTooltip("Tilts as it moves, and turns to follow the mouse while you drag.");
     cursorRotateRow->setShownIf([mod] { return mod->getSettingValue<bool>("custom-cursor"); });
     overlay->addRow(cursorRotateRow);
 #endif
