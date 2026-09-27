@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.5.3
+
+- Sharper text everywhere in Lazer UI: letters and icons are now drawn from distance fields, so they stay crisp at any size instead of going blotchy when shrunk
+- The cube on the logo has a clean edge instead of a stair-stepped one
+- osu!'s cursor on PC: it shrinks and glows pink when you click, turns to follow a drag, and taps. It appears once the game has loaded. Settings > Lazer UI > Cursor turns it off, changes its size or turns off the drag rotation
+- Lazer UI's settings are now the first section in settings
+
 ## v0.5.2
 
 - <cr>**IMPORTANT (Android): if nothing below shows up after updating, update by hand once.**</c> Older versions of the updater change the version number but keep running the old code. Close Geometry Dash, download `kamol1dn.lazer-ui.geode` from github.com/kamol1dn/GD-lazer/releases, **delete** the old one in `Android/media/com.geode.launcher/game/geode/mods` and copy the new one in (don't just overwrite). After that, updates apply properly
