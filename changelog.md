@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.4
+
+- The osu! cursor tilts as it moves, more the faster you move it. "Cursor rotation" in Settings > Lazer UI > Cursor turns off both the tilt and the drag spin
+- Fixed: the main levels' songs didn't play in the menu music player or song select on Android
+- The main levels' songs show their level in the now playing card
+
 ## v0.5.3
 
 - Sharper text everywhere in Lazer UI: letters and icons are now drawn from distance fields, so they stay crisp at any size instead of going blotchy when shrunk
