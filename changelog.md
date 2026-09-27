@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.5.2
+
+- <cr>**IMPORTANT (Android): if nothing below shows up after updating, update by hand once.**</c> Older versions of the updater change the version number but keep running the old code. Close Geometry Dash, download `kamol1dn.lazer-ui.geode` from github.com/kamol1dn/GD-lazer/releases, **delete** the old one in `Android/media/com.geode.launcher/game/geode/mods` and copy the new one in (don't just overwrite). After that, updates apply properly
+- Play a level that isn't downloaded yet straight from song select: the loader downloads the level and its song with a progress bar, then starts it (no more detour through GD's level page)
+- A close button on every page, and a back button at the bottom of settings (phones had no visible way out)
+- The main levels' songs play in the menu music player too
+- Like and dislike posts on other players' profiles
+- Fixed: the loading circle wobbled instead of spinning in place
+
 ## v0.5.1
 
 - <cr>**IMPORTANT (Android): if nothing below shows up after updating, update by hand once.**</c> Older versions of the updater change the version number but keep running the old code. Close Geometry Dash, download `kamol1dn.lazer-ui.geode` from github.com/kamol1dn/GD-lazer/releases, **delete** the old one in `Android/media/com.geode.launcher/game/geode/mods` and copy the new one in (don't just overwrite). After that, updates apply properly
