@@ -659,11 +659,17 @@ class $modify(LazerMenuLayer, MenuLayer) {
         }
         // No thumbnail for any of the song's levels: keep GD's own menu scene.
         Ref<MenuLayer> self = this;
-        lazer::thumbnails::fetchFirst(track->levelIDs(), [self, request](CCTexture2D* texture, int) {
+        auto show = [self, request](CCTexture2D* texture) {
             auto layer = static_cast<LazerMenuLayer*>(self.data());
             if (layer->m_fields->backgroundRequest != request || !layer->m_fields->background) return;
             layer->m_fields->background->setImage(texture);
-        });
+        };
+        if (track->songID < 0) {
+            // A main level's song: that level's screenshot (level N uses audio track N - 1).
+            lazer::thumbnails::fetchOfficial(-track->songID, show);
+            return;
+        }
+        lazer::thumbnails::fetchFirst(track->levelIDs(), [show](CCTexture2D* texture, int) { show(texture); });
     }
 
     void toggleNowPlaying() {

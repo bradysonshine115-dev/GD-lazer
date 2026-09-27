@@ -6,6 +6,7 @@
 #include <Geode/Geode.hpp>
 #include <functional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace lazer {
@@ -46,6 +47,8 @@ protected:
     void onClosed() override;
 
     void rebuild();
+    // Likes or dislikes a profile post.
+    void vote(int commentID, int accountID, bool like);
     float buildHeader(float y);
     float buildActions(float y);
     float buildStats(float y);
@@ -67,6 +70,7 @@ protected:
     ScrollDragger m_drag;
     cocos2d::CCLabelBMFont* m_status = nullptr;
     std::vector<Pill> m_pills;
+    std::unordered_map<int, bool> m_votes; // post ID -> liked, voted this session
     Pill* m_pressed = nullptr;
     float m_pad = 0;
 };

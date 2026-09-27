@@ -607,9 +607,11 @@ float ProfileOverlay::buildPosts(float y) {
     }
 
     float cardW = W - m_pad * 2;
+    auto glm = GameLevelManager::sharedState();
+    constexpr auto POST = LikeItemType::AccountComment;
     for (auto comment : CCArrayExt<GJComment*>(comments)) {
         auto text = makeWrappedText(comment->m_commentString, 16 * k, cardW - 40 * k, theme::CONTENT1);
-        float h = text->getContentSize().height + 44 * k;
+        float h = text->getContentSize().height + 52 * k;
         auto card = RoundedBox::create({cardW, h}, 10 * k, m_scheme.background4());
         card->setAnchorPoint({0, 1});
         card->setPosition({m_pad, -y});
@@ -619,14 +621,32 @@ float ProfileOverlay::buildPosts(float y) {
 
         auto likes = makeIcon(icon::THUMBS_UP, 12 * k);
         likes->setColor(comment->m_likeCount < 0 ? ccColor3B {255, 110, 110} : theme::rgb(m_scheme.content2()));
-        likes->setPosition({24 * k, 16 * k});
+        likes->setPosition({24 * k, 20 * k});
         card->addChild(likes);
         auto meta = makeText(fmt::format("{}   ·   {} ago", withCommas(comment->m_likeCount), std::string(comment->m_uploadDate)),
                              Weight::Regular, 13 * k);
         meta->setColor(theme::rgb(m_scheme.content2()));
         meta->setAnchorPoint({0, 0.5f});
-        meta->setPosition({36 * k, 16 * k});
+        meta->setPosition({36 * k, 20 * k});
         card->addChild(meta);
+
+        // Like / dislike (GD's LikeItemLayer, without the popup). Not on your own posts.
+        if (!page->m_ownProfile) {
+            int id = comment->m_commentID, parent = page->m_accountID;
+            auto vote = m_votes.find(id);
+            bool voted = vote != m_votes.end() || glm->hasLikedItem(POST, id, true, parent)
+                || glm->hasLikedItem(POST, id, false, parent);
+            auto button = [&](bool like, float x) {
+                bool chosen = vote != m_votes.end() && vote->second == like;
+                auto color = chosen ? (like ? m_scheme.colour3() : DANGER) : m_scheme.background5();
+                std::function<void()> action;
+                if (!voted) action = [this, id, parent, like] { this->vote(id, parent, like); };
+                return addPill(like ? icon::THUMBS_UP : icon::THUMBS_DOWN, "", x, y + h - 35 * k, action, color);
+            };
+            float x = m_pad + cardW - 14 * k - 46 * k;
+            button(false, x);
+            button(true, x - 52 * k);
+        }
         y += h + 8 * k;
     }
 
@@ -645,6 +665,20 @@ float ProfileOverlay::buildPosts(float y) {
         y += 34 * k;
     }
     return y;
+}
+
+void ProfileOverlay::vote(int commentID, int accountID, bool like) {
+    auto comments = fields(m_page)->m_fields->comments.data();
+    if (!comments || m_votes.contains(commentID)) return;
+    GameLevelManager::sharedState()->likeItem(LikeItemType::AccountComment, commentID, like, accountID);
+    m_votes[commentID] = like;
+    // Count it right away, like GD's comment cells do.
+    for (auto comment : CCArrayExt<GJComment*>(comments)) {
+        if (comment->m_commentID == commentID) comment->m_likeCount += like ? 1 : -1;
+    }
+    float scroll = m_scroll->scroll();
+    rebuild();
+    m_scroll->scrollTo(scroll, false);
 }
 
 // --- per frame ---
@@ -676,7 +710,8 @@ void ProfileOverlay::onUpdate(float dt) {
     auto mouse = geode::cocos::getMousePos();
     bool interactive = isOpen() && !m_drag.dragging() && m_scroll->containsWorldPoint(mouse);
     for (auto& pill : m_pills) {
-        bool hovered = interactive && nodeContains(pill.node, mouse);
+        // Pills without an action (a post you already voted on) are just labels.
+        bool hovered = interactive && pill.action && nodeContains(pill.node, mouse);
         if (hovered && !pill.hovered) sfx::hover(sfx::sound::DEFAULT_HOVER);
         pill.hovered = hovered;
         pill.bg->setFillColor(hovered ? theme::lerp(pill.color, {255, 255, 255, 255}, 0.12f) : pill.color);
@@ -705,7 +740,7 @@ void ProfileOverlay::ccTouchEnded(CCTouch* touch, CCEvent* e) {
     m_drag.ended();
     auto pressed = m_pressed;
     m_pressed = nullptr;
-    if (!pressed || !nodeContains(pressed->node, touch->getLocation())) return;
+    if (!pressed || !pressed->action || !nodeContains(pressed->node, touch->getLocation())) return;
     sfx::click(sfx::sound::DEFAULT_SELECT);
     auto action = pressed->action; // may rebuild the page
     if (action) action();

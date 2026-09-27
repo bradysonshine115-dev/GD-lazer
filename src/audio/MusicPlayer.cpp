@@ -29,6 +29,8 @@ namespace {
         return mod->getSettingValue<bool>("enabled") && mod->getSettingValue<bool>("music-player");
     }
 
+    constexpr int MAIN_LEVEL_SONGS = 22;
+
     std::vector<int> parseSongIDs(std::string const& list) {
         std::vector<int> ids;
         for (auto part : utils::string::split(list, ",")) {
@@ -87,6 +89,20 @@ void MusicPlayer::rebuildPlaylist() {
         }
     }
 
+    // RobTop's main level songs (Stereo Madness .. Dash), which ship with the game.
+    // Negative IDs keep them apart from Newgrounds songs (and blockable).
+    for (int audio = 0; audio < MAIN_LEVEL_SONGS; audio++) {
+        int id = officialSongID(audio);
+        if (m_blocked.contains(id)) continue;
+        std::string file = LevelTools::getAudioFileName(audio);
+        auto path = CCFileUtils::sharedFileUtils()->fullPathForFilename(file.c_str(), false);
+        if (path.empty() || !CCFileUtils::sharedFileUtils()->isFileExist(path)) continue;
+        tracks.push_back({
+            id, path, LevelTools::getAudioTitle(audio),
+            LevelTools::nameForArtist(LevelTools::artistForAudio(audio)), {},
+        });
+    }
+
     // Shuffled once, so the menu doesn't always start on the same song.
     std::shuffle(tracks.begin(), tracks.end(), rng());
 
@@ -114,9 +130,9 @@ bool MusicPlayer::startMenuMusic() {
     // Our song is already playing (e.g. GD asked again on a menu change): leave it alone.
     if (m_active) return true;
 
-    int previousSong = current() ? current()->songID : -1;
+    int previousSong = current() ? current()->songID : 0; // 0: no song (main level songs are negative)
     rebuildPlaylist();
-    log::info("Menu music: {} downloaded level songs", m_tracks.size());
+    log::info("Menu music: {} songs", m_tracks.size());
     if (m_tracks.empty()) return false;
 
     // The intro starts it (see releaseIntro).

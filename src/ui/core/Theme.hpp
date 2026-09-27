@@ -49,9 +49,11 @@ namespace theme {
         cocos2d::ccColor4B light4() const { return get(0.4f, 0.5f); }
         cocos2d::ccColor4B dark3() const { return get(0.2f, 0.25f); }
         cocos2d::ccColor4B dark4() const { return get(0.2f, 0.2f); }
+        cocos2d::ccColor4B background3() const { return get(0.1f, 0.25f); }
         cocos2d::ccColor4B background4() const { return get(0.1f, 0.2f); }
         cocos2d::ccColor4B background5() const { return get(0.1f, 0.15f); }
         cocos2d::ccColor4B background6() const { return get(0.1f, 0.1f); }
+        cocos2d::ccColor4B content1() const { return get(0.4f, 1.f); }
         cocos2d::ccColor4B content2() const { return get(0.4f, 0.9f); }
     };
     inline cocos2d::ccColor4B lerp(cocos2d::ccColor4B a, cocos2d::ccColor4B b, float t) {

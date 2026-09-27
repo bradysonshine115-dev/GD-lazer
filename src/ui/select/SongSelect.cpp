@@ -278,6 +278,7 @@ void SongSelect::onExit() {
     CCDirector::get()->getMouseDispatcher()->removeDelegate(this);
     auto glm = GameLevelManager::sharedState();
     if (glm->m_leaderboardManagerDelegate == this) glm->m_leaderboardManagerDelegate = nullptr;
+    stopListening();
     CCLayer::onExit();
 }
 
@@ -667,10 +668,6 @@ void SongSelect::selectRandom() {
 void SongSelect::start() {
     if (!m_hasSelection || m_starting) return;
     auto const& e = m_entries[m_visible[m_selected]];
-    if (!levels::readyToPlay(e)) {
-        openLevelPage();
-        return;
-    }
     sfx::play(sfx::sound::MENU_PLAY_SELECT);
     closeFolders();
     m_starting = true;
@@ -697,6 +694,7 @@ void SongSelect::start() {
     m_metaAlpha.set(0);
     m_dimTween.set(BACKGROUND_DIM);
     m_dimTween.to(LOADER_DIM, 800, Easing::OutQuint);
+    if (!levels::readyToPlay(e)) startDownloads(e);
 }
 
 void SongSelect::buildLoader(levels::Entry const& e) {
@@ -736,8 +734,33 @@ void SongSelect::buildLoader(levels::Entry const& e) {
     });
     auto shade = RoundedBox::create(boxSize, 10 * k, {0, 0, 0, 110});
     centred(main, shade, 48 * k);
-    m_spinner = makeIcon(icon::ROTATE, 24 * k);
-    centred(main, m_spinner, 48 * k);
+    // The glyph doesn't sit in the middle of its label's line box: spin a holder
+    // around the glyph's own centre instead.
+    m_spinner = CCNode::create();
+    auto glyph = makeIcon(icon::ROTATE, 24 * k);
+    glyph->setAnchorPoint({0, 0});
+    if (auto letter = glyph->getChildByType<CCSprite>(0)) {
+        glyph->setPosition(-letter->getPosition() * glyph->getScale());
+    }
+    m_spinner->addChild(glyph);
+    m_spinner->setPosition({0, 48 * k});
+    main->addChild(m_spinner);
+    m_loaderStatus = nullptr;
+    m_loaderFill = nullptr;
+    if (!levels::readyToPlay(e)) {
+        // Downloading first: the spinner moves up for a status line and a bar.
+        m_spinner->setPositionY(60 * k);
+        m_loaderStatus = makeText("downloading", Weight::Regular, 14 * k);
+        m_loaderStatus->setColor(theme::CONTENT2);
+        centred(main, m_loaderStatus, 38 * k);
+        m_loaderBarW = boxSize.width - 40 * k;
+        auto track = RoundedBox::create({m_loaderBarW, 4 * k}, 2 * k, {255, 255, 255, 40});
+        centred(main, track, 26 * k);
+        m_loaderFill = RoundedBox::create({4 * k, 4 * k}, 2 * k, theme::COLOUR3);
+        m_loaderFill->setAnchorPoint({0, 0.5f});
+        m_loaderFill->setPosition({-m_loaderBarW / 2, 26 * k});
+        main->addChild(m_loaderFill);
+    }
 
     auto meta = CCNode::create();
     m_loader->addChild(meta);
@@ -793,6 +816,9 @@ void SongSelect::setTreeOpacity(CCNode* node, float factor) {
 
 void SongSelect::cancelLoader() {
     if (!m_starting || m_loaderPhase != LoaderPhase::In) return;
+    // Downloads carry on in the background (as from GD's level page).
+    m_downloading = false;
+    stopListening();
     sfx::play(sfx::sound::DEFAULT_SELECT);
     m_loaderPhase = LoaderPhase::Cancelling;
     m_loaderMs = 0;
@@ -811,7 +837,15 @@ void SongSelect::updateLoader(float dt) {
         case LoaderPhase::In:
             // The details follow the card in (MetadataInfo's delayed fade).
             if (m_loaderMs >= 500 && m_metaAlpha.target() < 1) m_metaAlpha.to(1, 500, Easing::OutQuint);
-            if (m_loaderMs >= PUSH_DELAY) {
+            if (m_downloading) {
+                updateDownloads(dt);
+                // The wait picks up again once everything is here.
+                m_loaderMs = std::min(m_loaderMs, PUSH_DELAY - 700.f);
+                if (m_downloadFailed && (m_failedMs += ms) >= 1800) {
+                    cancelLoader();
+                    return;
+                }
+            } else if (m_loaderMs >= PUSH_DELAY) {
                 // ContentOut: the card shrinks and fades while the song fades.
                 m_loaderPhase = LoaderPhase::Out;
                 m_loaderMs = 0;
@@ -837,6 +871,8 @@ void SongSelect::updateLoader(float dt) {
                 for (auto root : m_uiRoots) setTreeOpacity(root, 1);
                 m_loader->removeFromParent();
                 m_loader = m_loaderMeta = m_spinner = nullptr;
+                m_loaderStatus = nullptr;
+                m_loaderFill = nullptr;
                 m_uiRoots.clear();
                 m_baseOpacity.clear();
                 m_wedge->setPositionX(0);
@@ -868,6 +904,112 @@ void SongSelect::updateLoader(float dt) {
     m_background->setDim(m_dimTween.get());
 }
 
+void SongSelect::startDownloads(levels::Entry const& e) {
+    m_downloading = true;
+    m_downloadFailed = false;
+    m_failedMs = 0;
+    m_downloadProgress.set(0);
+    auto level = e.level;
+    if (std::string(level->m_levelString).empty()) {
+        auto glm = GameLevelManager::sharedState();
+        glm->m_levelDownloadDelegate = this;
+        glm->downloadLevel(e.id, false, 0);
+    }
+    int songID = level->m_songID;
+    auto songs = MusicDownloadManager::sharedState();
+    if (songID > 0 && !songs->isSongDownloaded(songID)) {
+        songs->addMusicDownloadDelegate(this);
+        // GD's song widget when it's this level's: it also fetches the level's
+        // extra songs and SFX. Otherwise just the song.
+        auto w = m_songWidget;
+        if (w && w->m_downloadBtn && w->m_songInfoObject && w->m_songInfoObject->m_songID == songID) {
+            w->onDownload(w->m_downloadBtn);
+        } else {
+            songs->downloadSong(songID);
+        }
+    }
+    updateDownloads(0);
+}
+
+void SongSelect::updateDownloads(float dt) {
+    if (!m_downloading || m_downloadFailed || !m_loaderLevel) return;
+    auto level = m_loaderLevel.data();
+    auto songs = MusicDownloadManager::sharedState();
+    int songID = level->m_songID;
+    bool levelReady = !std::string(level->m_levelString).empty();
+    bool songReady = songID <= 0 || songs->isSongDownloaded(songID);
+    int percent = songReady ? 100 : songs->getDownloadProgress(songID);
+
+    // GD reports no progress for the level's data (it's small): it counts as a fifth.
+    float progress = (levelReady ? 0.2f : 0.f) + 0.8f * std::clamp(percent / 100.f, 0.f, 1.f);
+    if (progress != m_downloadProgress.target()) m_downloadProgress.to(progress, 300, Easing::OutQuint);
+    m_downloadProgress.update(dt);
+
+    if (m_loaderStatus) {
+        std::string status;
+        if (!levelReady) status = "downloading level";
+        if (!songReady) {
+            std::string song = percent > 0 ? fmt::format("song {}%", percent) : "song";
+            status = status.empty() ? "downloading " + song : status + " and " + song;
+        }
+        if (status.empty()) status = "ready";
+        if (m_loaderStatus->getString() != status) m_loaderStatus->setString(status.c_str());
+    }
+    if (m_loaderFill) {
+        float h = m_loaderFill->getContentSize().height;
+        m_loaderFill->setContentSize({std::max(h, m_loaderBarW * m_downloadProgress.get()), h});
+    }
+
+    if (levelReady && songReady) {
+        m_downloading = false;
+        stopListening();
+        if (m_loaderFill) {
+            float h = m_loaderFill->getContentSize().height;
+            m_loaderFill->setContentSize({m_loaderBarW, h});
+        }
+        // Song select plays it straight away from now on.
+        for (auto& entry : m_entries) {
+            if (entry.level == level && songID > 0) entry.songPath = songs->pathForSong(songID);
+        }
+    }
+}
+
+void SongSelect::levelDownloadFinished(GJGameLevel* level) {
+    auto glm = GameLevelManager::sharedState();
+    if (glm->m_levelDownloadDelegate == this) glm->m_levelDownloadDelegate = nullptr;
+    // GD may hand back a fresh copy rather than the saved level: keep its data.
+    if (level && m_loaderLevel && level != m_loaderLevel.data()
+        && level->m_levelID.value() == m_loaderLevel->m_levelID.value()
+        && std::string(m_loaderLevel->m_levelString).empty()) {
+        m_loaderLevel->m_levelString = level->m_levelString;
+    }
+}
+
+void SongSelect::levelDownloadFailed(int) {
+    auto glm = GameLevelManager::sharedState();
+    if (glm->m_levelDownloadDelegate == this) glm->m_levelDownloadDelegate = nullptr;
+    downloadFailed("couldn't download the level");
+}
+
+void SongSelect::downloadSongFailed(int id, GJSongError) {
+    if (m_loaderLevel && id == m_loaderLevel->m_songID) downloadFailed("couldn't download the song");
+}
+
+void SongSelect::downloadFailed(char const* message) {
+    if (!m_downloading || m_downloadFailed) return;
+    m_downloadFailed = true;
+    if (m_loaderStatus) {
+        m_loaderStatus->setString(message);
+        m_loaderStatus->setColor({255, 110, 110});
+    }
+}
+
+void SongSelect::stopListening() {
+    auto glm = GameLevelManager::sharedState();
+    if (glm->m_levelDownloadDelegate == this) glm->m_levelDownloadDelegate = nullptr;
+    MusicDownloadManager::sharedState()->removeMusicDownloadDelegate(this);
+}
+
 void SongSelect::openLevelPage() {
     if (!m_hasSelection) return;
     auto const& e = m_entries[m_visible[m_selected]];
@@ -893,7 +1035,8 @@ void SongSelect::back() {
     if (!playing.empty() && engine->isMusicPlaying(0)) {
         auto it = std::find_if(m_entries.begin(), m_entries.end(), [&](auto const& e) { return e.songPath == playing; });
         if (it != m_entries.end()) {
-            MusicPlayer::Track track {it->official ? 0 : it->level->m_songID, playing, it->songTitle, it->songArtist, {}};
+            int songID = it->official ? MusicPlayer::officialSongID(it->level->m_audioTrack) : it->level->m_songID;
+            MusicPlayer::Track track {songID, playing, it->songTitle, it->songArtist, {}};
             // (RobTop's level IDs aren't online IDs: no thumbnails to look up for them.)
             if (!it->official) track.levels.push_back({it->id, it->name, it->creator});
             MusicPlayer::get().adopt(std::move(track));

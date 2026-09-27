@@ -153,6 +153,22 @@ bool SettingsOverlay::init(float topInset) {
     m_sidebarSelection->setAnchorPoint({0, 0.5f});
     m_sidebar->addChild(m_sidebarSelection, 2);
 
+    // Back, at the bottom of the sidebar: phones can't press Escape, and tapping
+    // beside the panel to close it isn't obvious.
+    float size = SIDEBAR_WIDTH * m_k;
+    m_backButton = CCNode::create();
+    m_backButton->setContentSize({m_sidebarExpandedWidth, size});
+    m_backButton->setPosition({0, 10 * m_k});
+    m_backIcon = makeIcon(icon::CHEVRON_LEFT, 20 * m_k);
+    m_backIcon->setPosition({size / 2, size / 2});
+    m_backButton->addChild(m_backIcon);
+    m_backLabel = makeText("back", Weight::SemiBold, 17 * m_k);
+    m_backLabel->setAnchorPoint({0, 0.5f});
+    m_backLabel->setPosition({size, size / 2});
+    m_backLabel->setOpacity(0);
+    m_backButton->addChild(m_backLabel);
+    m_sidebar->addChild(m_backButton, 1);
+
     m_tooltip = CCNode::create();
     m_tooltip->setVisible(false);
     this->addChild(m_tooltip, 10);
@@ -350,6 +366,12 @@ SettingsRow* SettingsOverlay::rowAt(CCPoint world) {
     return nullptr;
 }
 
+bool SettingsOverlay::overBack(CCPoint world) {
+    auto local = m_backButton->convertToNodeSpace(world);
+    float w = m_sidebarWidth + (m_sidebarExpandedWidth - m_sidebarWidth) * m_sidebarExpand.get();
+    return local.x >= 0 && local.y >= 0 && local.x <= w && local.y <= m_backButton->getContentSize().height;
+}
+
 int SettingsOverlay::sidebarButtonAt(CCPoint world) {
     for (size_t i = 0; i < m_sections.size(); i++) {
         auto b = m_sections[i].sidebarButton;
@@ -455,6 +477,12 @@ void SettingsOverlay::update(float dt) {
         s.sidebarLabel->setColor(lit ? theme::CONTENT1 : theme::FOREGROUND1);
         s.sidebarLabel->setOpacity(toByte(expand));
     }
+    bool backHovered = interactive && overBack(mouse);
+    if (backHovered && !m_backHovered) sfx::hover(sfx::sound::SIDEBAR_HOVER);
+    m_backHovered = backHovered;
+    m_backIcon->setColor(backHovered ? theme::CONTENT1 : theme::FOREGROUND1);
+    m_backLabel->setColor(backHovered ? theme::CONTENT1 : theme::FOREGROUND1);
+    m_backLabel->setOpacity(toByte(expand));
 
     // Row hover.
     SettingsRow* hovered = (interactive && !m_scrollDragging && !overSidebar) ? rowAt(mouse) : nullptr;
@@ -491,6 +519,8 @@ bool SettingsOverlay::ccTouchBegan(CCTouch* touch, CCEvent*) {
     m_scrollDragging = false;
     m_dragVelocity = 0;
     m_pressedRow = nullptr;
+    m_pressedBack = overBack(loc);
+    if (m_pressedBack) return true;
     m_pressedSidebar = sidebarButtonAt(loc);
     if (m_pressedSidebar < 0 && m_scroll->containsWorldPoint(loc)) {
         m_pressedRow = rowAt(loc);
@@ -526,6 +556,14 @@ void SettingsOverlay::ccTouchMoved(CCTouch* touch, CCEvent*) {
 
 void SettingsOverlay::ccTouchEnded(CCTouch* touch, CCEvent*) {
     auto loc = touch->getLocation();
+    if (m_pressedBack) {
+        m_pressedBack = false;
+        if (overBack(loc)) {
+            sfx::click(sfx::sound::SIDEBAR_SELECT);
+            close();
+        }
+        return;
+    }
     if (m_scrollDragging) {
         m_scroll->endDrag(m_dragVelocity);
     } else if (m_pressedSidebar >= 0) {

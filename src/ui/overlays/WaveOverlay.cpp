@@ -94,6 +94,17 @@ bool WaveOverlay::init(float topInset, theme::Scheme scheme, char const* icon,
     descLabel->setPosition({textX, m_height - headerH / 2 - 4 * m_k});
     m_content->addChild(descLabel, 1);
 
+    // Close button: osu! closes overlays with Escape or a click outside, but
+    // phones have neither (and not every phone has a back gesture).
+    float closeSize = std::min(44.f * m_k, headerH * 0.6f);
+    m_closeButton = RoundedBox::create({closeSize, closeSize}, closeSize / 2, scheme.background3());
+    m_closeButton->setPosition({win.width - pad * 0.6f - closeSize / 2, m_height - headerH / 2});
+    auto closeIcon = makeIcon(icon::XMARK, closeSize * 0.45f);
+    closeIcon->setColor(theme::rgb(scheme.content1()));
+    closeIcon->setPosition({closeSize / 2, closeSize / 2});
+    m_closeButton->addChild(closeIcon, 1);
+    m_content->addChild(m_closeButton, 3);
+
     m_body = CCNode::create();
     m_body->setContentSize({win.width, m_height - headerH});
     m_content->addChild(m_body, 2);
@@ -174,6 +185,10 @@ void WaveOverlay::update(float dt) {
 
     // Hover once the content has mostly arrived.
     bool interactive = m_open && m_contentY.get() < 0.2f;
+    bool closeHovered = interactive && overClose(geode::cocos::getMousePos());
+    if (closeHovered && !m_closeHovered) sfx::hover(sfx::sound::DEFAULT_HOVER);
+    m_closeHovered = closeHovered;
+    m_closeButton->setFillColor(closeHovered ? m_scheme.highlight1() : m_scheme.background3());
     auto hovered = interactive ? rowAt(geode::cocos::getMousePos()) : nullptr;
     if (hovered != m_hovered) {
         if (m_hovered) m_hovered->setHovered(false);
@@ -188,11 +203,27 @@ bool WaveOverlay::ccTouchBegan(CCTouch* touch, CCEvent*) {
     if (touchOnOpenCard(touch->getLocation())) return false;
     // The toolbar above stays usable.
     if (touch->getLocation().y > m_height) return false;
-    m_pressed = rowAt(touch->getLocation());
+    m_closePressed = overClose(touch->getLocation());
+    m_pressed = m_closePressed ? nullptr : rowAt(touch->getLocation());
     return true; // swallow everything else so the menu underneath doesn't react
 }
 
+bool WaveOverlay::overClose(CCPoint world) {
+    auto local = m_closeButton->convertToNodeSpace(world);
+    auto size = m_closeButton->getContentSize();
+    // A little larger than drawn, for fingers.
+    float slop = 8 * m_k;
+    return local.x >= -slop && local.y >= -slop && local.x <= size.width + slop && local.y <= size.height + slop;
+}
+
 void WaveOverlay::ccTouchEnded(CCTouch* touch, CCEvent*) {
+    if (m_closePressed && overClose(touch->getLocation())) {
+        m_closePressed = false;
+        sfx::click(sfx::sound::DEFAULT_SELECT);
+        close();
+        return;
+    }
+    m_closePressed = false;
     if (m_pressed && rowAt(touch->getLocation()) == m_pressed) {
         m_pressed->onClick(m_pressed->convertToNodeSpace(touch->getLocation()));
     }

@@ -9,7 +9,8 @@
 namespace lazer {
 
 // The menu's music, after osu!'s MusicController: instead of GD's menu loop it
-// plays the downloaded songs of your saved levels, one after another. Each
+// plays the downloaded songs of your saved levels and the main levels' songs,
+// one after another. Each
 // track remembers which levels use it, so the menu can show their thumbnail.
 //
 // Playback goes through GD's own music channel (FMODAudioEngine channel 0), so
@@ -36,6 +37,9 @@ public:
             return ids;
         }
     };
+
+    // Track::songID of a main level's song (GD audio track 0 = Stereo Madness).
+    static int officialSongID(int audioTrack) { return -(audioTrack + 1); }
 
     enum class Direction { None, Next, Prev };
     using Listener = std::function<void(Track const*, Direction)>;

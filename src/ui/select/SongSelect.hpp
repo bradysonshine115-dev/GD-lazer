@@ -28,7 +28,8 @@ class MenuBackground;
 // The selected level's song previews and its thumbnail becomes the blurred
 // background. Playing a level (or backing out of it) comes back here.
 // (GD's CCLayer is already a CCMouseDelegate.)
-class SongSelect : public cocos2d::CCLayer, public CustomSongDelegate, public LeaderboardManagerDelegate {
+class SongSelect : public cocos2d::CCLayer, public CustomSongDelegate, public LeaderboardManagerDelegate,
+                   public LevelDownloadDelegate, public MusicDownloadDelegate {
 public:
     // From the main menu: the menu's song keeps playing, with its level selected.
     static cocos2d::CCScene* scene(levels::Kind kind);
@@ -63,6 +64,12 @@ public:
     void updateUserScoreFailed() override {}
     void loadLeaderboardFinished(cocos2d::CCArray* scores, char const* key) override;
     void loadLeaderboardFailed(char const* key) override;
+
+    // Downloads for a level that isn't ready to play (see the loader).
+    void levelDownloadFinished(GJGameLevel* level) override;
+    void levelDownloadFailed(int response) override;
+    void downloadSongFailed(int id, GJSongError error) override;
+    void loadSongInfoFailed(int id, GJSongError error) override { downloadSongFailed(id, error); }
 
 protected:
     // Saved first: most players mostly play online levels.
@@ -111,6 +118,11 @@ protected:
     void buildLoader(levels::Entry const& e);
     void updateLoader(float dt);
     void cancelLoader();
+    // A level without its data or song: fetch them behind the loader first.
+    void startDownloads(levels::Entry const& e);
+    void updateDownloads(float dt);
+    void downloadFailed(char const* message);
+    void stopListening();
     // Fades a node tree, relative to each node's opacity when first faded.
     void setTreeOpacity(cocos2d::CCNode* node, float factor);
     void openLevelPage();
@@ -199,6 +211,13 @@ protected:
     cocos2d::CCNode* m_loaderMeta = nullptr;
     cocos2d::CCNode* m_spinner = nullptr;
     geode::Ref<GJGameLevel> m_loaderLevel;
+    bool m_downloading = false;         // the loader waits for the level's data and song
+    bool m_downloadFailed = false;
+    float m_failedMs = 0;
+    cocos2d::CCLabelBMFont* m_loaderStatus = nullptr;
+    RoundedBox* m_loaderFill = nullptr;
+    float m_loaderBarW = 0;
+    Tweened<float> m_downloadProgress {0.f};
     LoaderPhase m_loaderPhase = LoaderPhase::In;
     float m_loaderMs = 0;
     std::vector<cocos2d::CCNode*> m_uiRoots;               // song select's own nodes, faded out

@@ -51,6 +51,7 @@ protected:
 
 private:
     SettingsRow* rowAt(cocos2d::CCPoint world);
+    bool overClose(cocos2d::CCPoint world);
 
     float m_topInset = 0;
     float m_height = 0;
@@ -63,6 +64,10 @@ private:
     cocos2d::CCNode* m_content = nullptr;
     cocos2d::CCNode* m_body = nullptr;
     Tweened<float> m_contentY {0.f};           // 0 = in place, 1 = one full height below
+
+    RoundedBox* m_closeButton = nullptr;
+    bool m_closeHovered = false;
+    bool m_closePressed = false;
 
     std::vector<SettingsRow*> m_interactive;
     SettingsRow* m_hovered = nullptr;

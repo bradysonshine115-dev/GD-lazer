@@ -73,6 +73,7 @@ namespace icon {
     constexpr auto CIRCLE_PLAY = "\xEF\x85\x84";    // f144
     constexpr auto COMPASS = "\xEF\x85\x8E";        // f14e
     constexpr auto THUMBS_UP = "\xEF\x85\xA4";      // f164
+    constexpr auto THUMBS_DOWN = "\xEF\x85\xA5";    // f165
     constexpr auto MOON = "\xEF\x86\x86";           // f186
     constexpr auto CUBE = "\xEF\x86\xB2";           // f1b2
     constexpr auto SLIDERS = "\xEF\x87\x9E";        // f1de

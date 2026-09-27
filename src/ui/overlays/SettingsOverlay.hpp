@@ -57,6 +57,7 @@ protected:
     bool applicabilityChanged();
     SettingsRow* rowAt(cocos2d::CCPoint world);
     int sidebarButtonAt(cocos2d::CCPoint world);
+    bool overBack(cocos2d::CCPoint world);
     void updateTooltip(float dt, SettingsRow* hovered);
 
     struct Section {
@@ -102,6 +103,11 @@ protected:
     SettingsRow* m_pressedRow = nullptr;
     SettingsRow* m_hoveredRow = nullptr;
     int m_pressedSidebar = -1;
+    cocos2d::CCNode* m_backButton = nullptr;
+    cocos2d::CCLabelBMFont* m_backIcon = nullptr;
+    cocos2d::CCLabelBMFont* m_backLabel = nullptr;
+    bool m_backHovered = false;
+    bool m_pressedBack = false;
     int m_hoveredSidebar = -1;
     bool m_scrollDragging = false;
     cocos2d::CCPoint m_touchStart;
