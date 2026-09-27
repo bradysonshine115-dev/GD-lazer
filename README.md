@@ -1,11 +1,9 @@
 # Lazer UI
 
 > [!IMPORTANT]
-> Builds come from this repo's source through GitHub Actions: grab the `.geode` from [Releases](https://github.com/kamol1dn/GD-lazer/releases) or the latest [Actions](https://github.com/kamol1dn/GD-lazer/actions) run. They aren't reviewed by Geode, so install manually and at your own risk.
->
 > **It is not intended for Geode's official mod index, and never will be.** Please do not submit it there or ask for it to be added.
 >
-> Builds are made by GitHub Actions from this repo's source: grab the `.geode` from [Releases](https://github.com/kamol1dn/GD-lazer/releases) or the latest [Actions](https://github.com/kamol1dn/GD-lazer/actions) run. They are not reviewed by Geode, so install manually and at your own risk. Early copies shared before CI was set up were local builds.
+> Builds come from this repo's source through GitHub Actions: grab the `.geode` from [Releases](https://github.com/kamol1dn/GD-lazer/releases) or the latest [Actions](https://github.com/kamol1dn/GD-lazer/actions) run. They aren't reviewed by Geode, so install manually and at your own risk.
 
 ## An apology
 
