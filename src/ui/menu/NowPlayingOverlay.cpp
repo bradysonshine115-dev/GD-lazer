@@ -169,13 +169,14 @@ void NowPlayingOverlay::setText(CCLabelBMFont* label, std::string const& text) {
 
 void NowPlayingOverlay::onEnter() {
     CCNode::onEnter();
-    // Above the menu, below the toolbar's own buttons (-131).
-    CCDirector::sharedDirector()->getTouchDispatcher()->addTargetedDelegate(this, -130, true);
+    // Ahead of the full-screen overlays (-140): the card is drawn over them.
+    CCDirector::sharedDirector()->getTouchDispatcher()->addTargetedDelegate(this, -145, true);
     m_listener = MusicPlayer::get().addListener([this](auto track, auto dir) { onTrackChanged(track, dir); });
 }
 
 void NowPlayingOverlay::onExit() {
     CCDirector::sharedDirector()->getTouchDispatcher()->removeDelegate(this);
+    setCardOpen(m_panel, false);
     MusicPlayer::get().removeListener(m_listener);
     CCNode::onExit();
 }
@@ -183,6 +184,7 @@ void NowPlayingOverlay::onExit() {
 void NowPlayingOverlay::open() {
     if (m_open) return;
     m_open = true;
+    setCardOpen(m_panel, true);
     this->setVisible(true);
     m_alpha.to(1.f, TRANSITION, Easing::OutQuint);
     m_scale.to(1.f, TRANSITION, Easing::OutElasticHalf);
@@ -192,6 +194,7 @@ void NowPlayingOverlay::open() {
 void NowPlayingOverlay::close() {
     if (!m_open) return;
     m_open = false;
+    setCardOpen(m_panel, false);
     m_alpha.to(0.f, TRANSITION, Easing::OutQuint);
     m_scale.to(0.9f, TRANSITION, Easing::OutQuint);
     sfx::play(sfx::sound::OVERLAY_POP_OUT);

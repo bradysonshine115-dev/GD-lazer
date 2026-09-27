@@ -474,8 +474,8 @@ bool SettingsOverlay::ccTouchBegan(CCTouch* touch, CCEvent*) {
     auto win = CCDirector::sharedDirector()->getWinSize();
     auto loc = touch->getLocation();
 
-    // Toolbar stays usable.
-    if (loc.y > win.height - m_topInset) return false;
+    // Toolbar stays usable, and the account / music cards over it.
+    if (loc.y > win.height - m_topInset || touchOnOpenCard(loc)) return false;
 
     // Click outside the panel closes it, like osu!.
     float right = m_root->getPositionX() + m_sidebarWidth + m_panelWidth;

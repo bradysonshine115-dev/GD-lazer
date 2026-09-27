@@ -33,6 +33,8 @@ public:
     void registerWithTouchDispatcher() override;
     bool ccTouchBegan(cocos2d::CCTouch*, cocos2d::CCEvent*) override { return true; }
     void keyBackClicked() override {}
+    // The menu is visible once the intro reveals it.
+    bool revealed() const { return m_revealed; }
 
 protected:
     struct Triangle {

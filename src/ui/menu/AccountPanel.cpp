@@ -284,18 +284,20 @@ float AccountPanel::buildItems(float w, float top) {
 
 void AccountPanel::onEnter() {
     CCNode::onEnter();
-    // Above the menu, below the toolbar's own buttons (-131).
-    CCDirector::sharedDirector()->getTouchDispatcher()->addTargetedDelegate(this, -130, true);
+    // Ahead of the full-screen overlays (-140): the card is drawn over them.
+    CCDirector::sharedDirector()->getTouchDispatcher()->addTargetedDelegate(this, -145, true);
 }
 
 void AccountPanel::onExit() {
     CCDirector::sharedDirector()->getTouchDispatcher()->removeDelegate(this);
+    setCardOpen(m_panel, false);
     CCNode::onExit();
 }
 
 void AccountPanel::open() {
     if (m_open) return;
     m_open = true;
+    setCardOpen(m_panel, true);
     rebuild(); // icons, level and login state may have changed
     this->setVisible(true);
     m_alpha.to(1.f, TRANSITION, Easing::OutQuint);
@@ -306,6 +308,7 @@ void AccountPanel::open() {
 void AccountPanel::close() {
     if (!m_open) return;
     m_open = false;
+    setCardOpen(m_panel, false);
     m_alpha.to(0.f, TRANSITION, Easing::OutQuint);
     m_scale.to(0.9f, TRANSITION, Easing::OutQuint);
     sfx::play(sfx::sound::OVERLAY_POP_OUT);

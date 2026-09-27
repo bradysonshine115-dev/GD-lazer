@@ -348,7 +348,10 @@ class $modify(LazerMenuLayer, MenuLayer) {
         m_fields->toolbar = toolbar;
 
         toolbar->addLeft({lazer::makeIcon(icon::GEAR, 1), "settings", [this] { this->toggleSettings(); }});
-        toolbar->addLeft({lazer::makeIcon(icon::HOUSE, 1), "home", [buttons] { buttons->back(); }});
+        // Home closes whatever is open (like osu!'s CloseAllOverlays); with nothing open, back one menu.
+        toolbar->addLeft({lazer::makeIcon(icon::HOUSE, 1), "home", [this, buttons] {
+            if (!this->closeAllOverlays()) buttons->back();
+        }});
 
         buttons->setStateCallback([toolbar](ButtonSystem::State state) {
             // Back in a menu: nothing left to restore on the next menu load.
@@ -517,7 +520,11 @@ class $modify(LazerMenuLayer, MenuLayer) {
         // The user button opens our account card; GD's profile page is one of its items.
         Ref<CCMenuItem> profileRef = profile;
         auto panel = lazer::AccountPanel::create(toolbar->height(), {
-            [profileRef] { if (profileRef) profileRef->activate(); },
+            [this, profileRef] {
+                // The profile page replaces whatever is open, like osu!'s overlays.
+                this->closeAllOverlays();
+                if (profileRef) profileRef->activate();
+            },
             [this] {
                 g_returnState = m_fields->buttons ? m_fields->buttons->getState() : ButtonSystem::State::TopLevel;
                 this->onGarage(nullptr);
@@ -620,6 +627,26 @@ class $modify(LazerMenuLayer, MenuLayer) {
         if (f->stats && f->stats != keep) f->stats->close();
     }
 
+    // Every overlay and popup card. Returns whether any was open.
+    bool closeAllOverlays() {
+        auto& f = m_fields;
+        bool closed = false;
+        auto closeIf = [&](auto overlay) {
+            if (overlay && overlay->isOpen()) {
+                overlay->close();
+                closed = true;
+            }
+        };
+        closeIf(f->settings);
+        closeIf(f->rewards);
+        closeIf(f->quests);
+        closeIf(f->achievements);
+        closeIf(f->stats);
+        closeIf(f->nowPlaying);
+        closeIf(f->account);
+        return closed;
+    }
+
     void onTrackChanged(lazer::MusicPlayer::Track const* track) {
         auto nowPlaying = m_fields->nowPlaying;
         if (m_fields->ticker && !(nowPlaying && nowPlaying->isOpen())) m_fields->ticker->show(track);
@@ -664,6 +691,17 @@ class $modify(LazerMenuLayer, MenuLayer) {
         if (m_fields->stats && m_fields->stats->back()) return true;
         if (m_fields->buttons && m_fields->buttons->back()) return true;
         return false;
+    }
+
+    // GD's Enter and Space open its level select. Here they press the logo, like osu!'s Select.
+    void keyDown(enumKeyCodes key, double timestamp) {
+        auto& f = m_fields;
+        bool select = key == KEY_Enter || key == KEY_NumEnter || key == KEY_Space;
+        if (!f->buttons || !select) return MenuLayer::keyDown(key, timestamp);
+        auto intro = typeinfo_cast<lazer::IntroSequence*>(this->getChildByID("intro"_spr));
+        bool busy = g_exiting || lazer::g_overlayOpen || (intro && !intro->revealed())
+            || (f->nowPlaying && f->nowPlaying->isOpen()) || (f->account && f->account->isOpen());
+        if (!busy) f->buttons->pressLogo();
     }
 
 #ifndef GEODE_IS_ANDROID

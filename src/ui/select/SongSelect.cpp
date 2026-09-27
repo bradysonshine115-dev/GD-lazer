@@ -1766,8 +1766,9 @@ void SongSelect::scrollWheel(float y, float) {
     m_scrollTarget += notches * (m_panelH + m_spacing) * 1.5f;
 }
 
-void SongSelect::keyDown(enumKeyCodes key, double) {
-    if (!m_hasSelection || m_starting) return;
+void SongSelect::keyDown(enumKeyCodes key, double timestamp) {
+    // GD's CCLayer::keyDown turns Escape into keyBackClicked: let it through.
+    if (!m_hasSelection || m_starting) return CCLayer::keyDown(key, timestamp);
     switch (key) {
         case KEY_Up:
             if (m_selected > 0) {
@@ -1788,6 +1789,7 @@ void SongSelect::keyDown(enumKeyCodes key, double) {
             selectRandom();
             break;
         default:
+            CCLayer::keyDown(key, timestamp);
             break;
     }
 }

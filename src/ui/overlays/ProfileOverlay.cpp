@@ -128,6 +128,16 @@ void ProfileOverlay::present(ProfilePage* page) {
     auto scene = CCDirector::sharedDirector()->getRunningScene();
     if (!scene || !page) return;
 
+    // GD reopens the profile after its friends / requests / messages popups
+    // close: the page already showing that player takes it instead of stacking a second one.
+    for (auto child : CCArrayExt<CCNode*>(scene->getChildren())) {
+        auto open = typeinfo_cast<ProfileOverlay*>(child);
+        if (open && open->isOpen() && open->m_page && open->m_page->m_accountID == page->m_accountID) {
+            open->adopt(page);
+            return;
+        }
+    }
+
     // The overlay takes the player's colour once it's known; start from their
     // own colours on their own profile.
     float hue = 255.f;
@@ -149,13 +159,7 @@ bool ProfileOverlay::init(ProfilePage* page, theme::Scheme scheme) {
     m_page = page;
     m_pad = HORIZONTAL_PADDING * m_k;
 
-    // GD's page: in the scene (so it loads and its popups work), never drawn or touched.
-    page->setUserObject("hidden"_spr, CCBool::create(true));
-    page->setTouchEnabled(false);
-    page->setKeypadEnabled(false);
-    page->setOpacity(0);
-    if (page->m_mainLayer) page->m_mainLayer->setVisible(false);
-    this->addChild(page, -10);
+    adopt(page);
 
     m_scroll = ScrollArea::create(bodySize());
     body()->addChild(m_scroll);
@@ -165,6 +169,20 @@ bool ProfileOverlay::init(ProfilePage* page, theme::Scheme scheme) {
     m_status->setPosition(bodySize() / 2);
     body()->addChild(m_status, 2);
     return true;
+}
+
+void ProfileOverlay::adopt(ProfilePage* page) {
+    if (m_page == page) return;
+    // GD's page: in the scene (so it loads and its popups work), never drawn or touched.
+    page->setUserObject("hidden"_spr, CCBool::create(true));
+    page->setTouchEnabled(false);
+    page->setKeypadEnabled(false);
+    page->setOpacity(0);
+    if (page->m_mainLayer) page->m_mainLayer->setVisible(false);
+    this->addChild(page, -10);
+    // The old page goes; onUpdate rebuilds from the new one once it has loaded.
+    if (m_page && m_page->getParent() == this) m_page->removeFromParent();
+    m_page = page;
 }
 
 void ProfileOverlay::onEnter() {

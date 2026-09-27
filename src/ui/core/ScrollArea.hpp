@@ -35,6 +35,8 @@ public:
     // Re-register for the mouse wheel so we're the newest delegate again
     // (e.g. after a hidden GD list registered itself on top of us).
     void claimWheel();
+    // This and every parent visible.
+    bool shownOnScreen();
     // GD's mouse dispatcher only feeds the newest delegate. When an owner routes
     // the wheel itself (calling scrollWheel), turn this off before adding the
     // area so it doesn't take the wheel from its owner.
@@ -50,6 +52,7 @@ protected:
     float m_target = 0;
     bool m_dragging = false;
     bool m_ownsWheel = true;
+    bool m_shown = false; // visible on screen last frame
 };
 
 // Turns an owner's touches into drag scrolling for a ScrollArea: forward

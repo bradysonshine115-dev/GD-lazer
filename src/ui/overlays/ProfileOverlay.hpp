@@ -40,6 +40,8 @@ protected:
     };
 
     bool init(ProfilePage* page, theme::Scheme scheme);
+    // Takes `page` as the hidden GD page, replacing the current one.
+    void adopt(ProfilePage* page);
     void onUpdate(float dt) override;
     void onClosed() override;
 

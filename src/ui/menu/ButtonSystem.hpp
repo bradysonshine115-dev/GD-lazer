@@ -56,6 +56,8 @@ public:
 
     // Escape / back: submenu -> top level -> logo. Returns true if handled.
     bool back();
+    // Enter (osu!'s GlobalAction.Select): same as clicking the logo.
+    void pressLogo() { this->onLogoClicked(); }
 
     void update(float dt) override;
     // Screens pushed over the menu pop back to this same node, still leaving:

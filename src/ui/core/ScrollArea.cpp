@@ -72,11 +72,15 @@ bool ScrollArea::containsWorldPoint(CCPoint p) {
     return local.x >= 0 && local.y >= 0 && local.x <= size.width && local.y <= size.height;
 }
 
-void ScrollArea::scrollWheel(float y, float) {
-    if (!this->isVisible() || !containsWorldPoint(geode::cocos::getMousePos())) return;
-    for (auto n = this->getParent(); n; n = n->getParent()) {
-        if (!n->isVisible()) return;
+bool ScrollArea::shownOnScreen() {
+    for (CCNode* n = this; n; n = n->getParent()) {
+        if (!n->isVisible()) return false;
     }
+    return true;
+}
+
+void ScrollArea::scrollWheel(float y, float) {
+    if (!shownOnScreen() || !containsWorldPoint(geode::cocos::getMousePos())) return;
     // Positive = scroll down. Cap each event at a few notches so a fast flick
     // (or a free-spinning wheel) can't fling the list to the end.
     float notches = std::clamp(y / UNITS_PER_NOTCH, -3.f, 3.f);
@@ -103,6 +107,12 @@ void ScrollArea::endDrag(float velocity) {
 }
 
 void ScrollArea::update(float dt) {
+    // Every overlay's area registers when it's built, and only the newest gets
+    // the wheel: the one that just appeared takes it back.
+    bool shown = shownOnScreen();
+    if (shown && !m_shown) claimWheel();
+    m_shown = shown;
+
     if (!m_dragging) {
         m_current = damp(m_current, m_target, DECAY_PER_MS, dt * 1000.0);
         if (std::abs(m_current - m_target) < 0.01f) m_current = m_target;

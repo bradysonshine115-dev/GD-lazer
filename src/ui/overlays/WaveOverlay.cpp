@@ -185,6 +185,7 @@ void WaveOverlay::update(float dt) {
 
 bool WaveOverlay::ccTouchBegan(CCTouch* touch, CCEvent*) {
     if (!m_open || !this->isVisible()) return false;
+    if (touchOnOpenCard(touch->getLocation())) return false;
     // The toolbar above stays usable.
     if (touch->getLocation().y > m_height) return false;
     m_pressed = rowAt(touch->getLocation());

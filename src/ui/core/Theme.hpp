@@ -3,6 +3,7 @@
 #include <Geode/cocos/include/cocos2d.h>
 #include <Geode/loader/Mod.hpp>
 #include <algorithm>
+#include <vector>
 
 namespace lazer {
 
@@ -72,5 +73,25 @@ inline float unitScale() {
 // Set while a full overlay (settings, etc.) is open, so the menu underneath
 // stops reacting to hover. Touches are already swallowed by the overlay.
 inline bool g_overlayOpen = false;
+
+// Open floating cards (account, now playing). They're drawn over the full
+// overlays, but an overlay built while a GD popup exists (the hidden rewards /
+// quests pages) gets GD's forced touch priority and would take their touches
+// first: overlays let touches on these cards through.
+inline std::vector<cocos2d::CCNode*> g_openCards;
+
+inline bool touchOnOpenCard(cocos2d::CCPoint world) {
+    for (auto card : g_openCards) {
+        auto local = card->convertToNodeSpace(world);
+        auto size = card->getContentSize();
+        if (local.x >= 0 && local.y >= 0 && local.x <= size.width && local.y <= size.height) return true;
+    }
+    return false;
+}
+
+inline void setCardOpen(cocos2d::CCNode* card, bool open) {
+    std::erase(g_openCards, card);
+    if (open) g_openCards.push_back(card);
+}
 
 } // namespace lazer
