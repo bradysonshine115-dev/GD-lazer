@@ -80,6 +80,166 @@ void buildSettings(SettingsOverlay* overlay, MenuLayer* menu, MenuBackground* ba
         return pages;
     };
 
+    // --- Lazer UI + Geode (first: it's what people open settings here for) ---
+    overlay->beginSection("Lazer UI", icon::STAR);
+    overlay->addSubsection("Layout");
+    // Slider 0..1 covers 50%..200%, in steps of 5%.
+    auto scaleRow = SliderRow::create(
+        "UI scale", w, k,
+        [mod] { return (mod->getSettingValue<int64_t>("ui-scale") - 50) / 150.f; },
+        [mod](float v) { mod->setSettingValue<int64_t>("ui-scale", 50 + int64_t(std::round(v * 30)) * 5); },
+        [](float v) { return fmt::format("{}%", 50 + int(std::round(v * 30)) * 5); }
+    );
+    scaleRow->setTooltip("Size of the menus. Takes effect next time the menu loads.");
+    overlay->addRow(scaleRow);
+    overlay->addSubsection("Background");
+    auto dimRow = SliderRow::create(
+        "Background dim", w, k,
+        [mod] { return mod->getSettingValue<int64_t>("background-dim") / 100.f; },
+        [mod, background](float v) {
+            mod->setSettingValue<int64_t>("background-dim", int64_t(std::round(v * 100)));
+            if (background) background->setDim(v);
+        },
+        percent
+    );
+    overlay->addRow(dimRow);
+    auto blurRow = ToggleRow::create(
+        "Blur background", w, k,
+        [mod] { return mod->getSettingValue<bool>("background-blur"); },
+        [mod] {
+            bool v = !mod->getSettingValue<bool>("background-blur");
+            mod->setSettingValue<bool>("background-blur", v);
+            return v;
+        }
+    );
+    blurRow->setTooltip("Applies the next time the menu loads.");
+    overlay->addRow(blurRow);
+    auto trianglesRow = ToggleRow::create(
+        "Background triangles", w, k,
+        [mod] { return mod->getSettingValue<bool>("background-triangles"); },
+        [mod] {
+            bool v = !mod->getSettingValue<bool>("background-triangles");
+            mod->setSettingValue<bool>("background-triangles", v);
+            return v;
+        }
+    );
+    trianglesRow->setTooltip("Applies the next time the menu loads.");
+    overlay->addRow(trianglesRow);
+
+    auto introRow = ToggleRow::create(
+        "Intro and outro", w, k,
+        [mod] { return mod->getSettingValue<bool>("intro"); },
+        [mod] {
+            bool v = !mod->getSettingValue<bool>("intro");
+            mod->setSettingValue<bool>("intro", v);
+            return v;
+        }
+    );
+    introRow->setTooltip("Animated intro when the game starts, and an outro when you quit.");
+    overlay->addRow(introRow);
+
+    overlay->addSubsection("Parallax");
+    // Slider 0..1 covers 0%..8%, in steps of 0.5%. Applies live: the menu reads it every frame.
+    auto parallaxRow = [&](char const* name, char const* key, char const* tooltip) {
+        auto row = SliderRow::create(
+            name, w, k,
+            [mod, key] { return static_cast<float>(mod->getSettingValue<double>(key) / 8.0); },
+            [mod, key](float v) { mod->setSettingValue<double>(key, std::round(v * 16) / 2.0); },
+            [](float v) { return fmt::format("{}%", std::round(v * 16) / 2.0); }
+        );
+        row->setTooltip(tooltip);
+        overlay->addRow(row);
+    };
+    parallaxRow("Background parallax", "parallax-background", "How far the background moves with the mouse (on phones, the tilt).");
+    parallaxRow("Menu parallax", "parallax-menu", "How far the main menu's buttons move. Less than the background makes them float over it.");
+#ifdef GEODE_IS_MOBILE
+    auto tiltRow = ToggleRow::create(
+        "Tilt parallax", w, k,
+        [mod] { return mod->getSettingValue<bool>("tilt-parallax"); },
+        [mod] {
+            bool v = !mod->getSettingValue<bool>("tilt-parallax");
+            mod->setSettingValue<bool>("tilt-parallax", v);
+            return v;
+        }
+    );
+    tiltRow->setTooltip("Move the menu with the phone's tilt (gyroscope and accelerometer).");
+    overlay->addRow(tiltRow);
+#endif
+
+#ifdef GEODE_IS_WINDOWS
+    overlay->addSubsection("Cursor");
+    auto cursorRow = ToggleRow::create(
+        "osu! cursor", w, k,
+        [mod] { return mod->getSettingValue<bool>("custom-cursor"); },
+        [mod] {
+            bool v = !mod->getSettingValue<bool>("custom-cursor");
+            mod->setSettingValue<bool>("custom-cursor", v);
+            return v;
+        }
+    );
+    cursorRow->setTooltip("osu!'s menu cursor instead of the system pointer.");
+    overlay->addRow(cursorRow);
+    // Slider 0..1 covers 0.5x..2x, in steps of 0.1.
+    auto cursorSizeRow = SliderRow::create(
+        "Cursor size", w, k,
+        [mod] { return static_cast<float>((mod->getSettingValue<double>("cursor-size") - 0.5) / 1.5); },
+        [mod](float v) { mod->setSettingValue<double>("cursor-size", std::round((0.5 + v * 1.5) * 10) / 10.0); },
+        [](float v) { return fmt::format("{:.1f}x", std::round((0.5 + v * 1.5) * 10) / 10.0); }
+    );
+    cursorSizeRow->setShownIf([mod] { return mod->getSettingValue<bool>("custom-cursor"); });
+    overlay->addRow(cursorSizeRow);
+    auto cursorRotateRow = ToggleRow::create(
+        "Rotate cursor when dragging", w, k,
+        [mod] { return mod->getSettingValue<bool>("cursor-rotation"); },
+        [mod] {
+            bool v = !mod->getSettingValue<bool>("cursor-rotation");
+            mod->setSettingValue<bool>("cursor-rotation", v);
+            return v;
+        }
+    );
+    cursorRotateRow->setShownIf([mod] { return mod->getSettingValue<bool>("custom-cursor"); });
+    overlay->addRow(cursorRotateRow);
+#endif
+
+    overlay->addSubsection("Music");
+    auto musicRow = ToggleRow::create(
+        "Play level songs in the menu", w, k,
+        [mod] { return mod->getSettingValue<bool>("music-player"); },
+        [mod] {
+            bool v = !mod->getSettingValue<bool>("music-player");
+            mod->setSettingValue<bool>("music-player", v);
+            return v;
+        }
+    );
+    musicRow->setTooltip("Plays your downloaded levels' songs instead of the menu theme, with the level's thumbnail as the background. Applies the next time the menu loads.");
+    overlay->addRow(musicRow);
+    auto unblockRow = ButtonRow::create("Unblock all songs", w, k, [] { MusicPlayer::get().unblockAll(); });
+    unblockRow->setTooltip("Songs you blocked in the music player (the ban button) can play again.");
+    unblockRow->setShownIf([] { return MusicPlayer::get().blockedCount() > 0; });
+    overlay->addRow(unblockRow);
+
+    overlay->addSubsection("Updates");
+    auto updatesRow = ToggleRow::create(
+        "Check for updates on start", w, k,
+        [mod] { return mod->getSettingValue<bool>("check-updates"); },
+        [mod] {
+            bool v = !mod->getSettingValue<bool>("check-updates");
+            mod->setSettingValue<bool>("check-updates", v);
+            return v;
+        }
+    );
+    updatesRow->setTooltip("Lazer UI isn't on the Geode index: it checks GitHub for new versions and offers to install them.");
+    overlay->addRow(updatesRow);
+    overlay->addRow(ButtonRow::create(fmt::format("Check for updates ({})", mod->getVersion().toVString()), w, k,
+                                      [] { updater::checkManually(); }));
+
+    overlay->addSubsection("Mods");
+    overlay->addRow(ButtonRow::create("All Lazer UI settings", w, k, [mod] { openSettingsPopup(mod); }));
+    overlay->addRow(ButtonRow::create("Geode mods", w, k, [] { openModsList(); }));
+
+    overlay->addSubsection("Classic");
+    overlay->addRow(ButtonRow::create("Open classic GD settings", w, k, [menu] { menu->onOptions(nullptr); }));
+
     // --- General ---
     overlay->beginSection("General", icon::GEAR);
     overlay->addSubsection("Account");
@@ -179,131 +339,6 @@ void buildSettings(SettingsOverlay* overlay, MenuLayer* menu, MenuBackground* ba
         overlay->addSubsection("Parental");
         overlay->addRow(ButtonRow::create("Parental control", w, k, [gd] { gd->layer()->onParental(nullptr); }));
     }
-
-    // --- Lazer UI + Geode ---
-    overlay->beginSection("Lazer UI", icon::STAR);
-    overlay->addSubsection("Layout");
-    // Slider 0..1 covers 50%..200%, in steps of 5%.
-    auto scaleRow = SliderRow::create(
-        "UI scale", w, k,
-        [mod] { return (mod->getSettingValue<int64_t>("ui-scale") - 50) / 150.f; },
-        [mod](float v) { mod->setSettingValue<int64_t>("ui-scale", 50 + int64_t(std::round(v * 30)) * 5); },
-        [](float v) { return fmt::format("{}%", 50 + int(std::round(v * 30)) * 5); }
-    );
-    scaleRow->setTooltip("Size of the menus. Takes effect next time the menu loads.");
-    overlay->addRow(scaleRow);
-    overlay->addSubsection("Background");
-    auto dimRow = SliderRow::create(
-        "Background dim", w, k,
-        [mod] { return mod->getSettingValue<int64_t>("background-dim") / 100.f; },
-        [mod, background](float v) {
-            mod->setSettingValue<int64_t>("background-dim", int64_t(std::round(v * 100)));
-            if (background) background->setDim(v);
-        },
-        percent
-    );
-    overlay->addRow(dimRow);
-    auto blurRow = ToggleRow::create(
-        "Blur background", w, k,
-        [mod] { return mod->getSettingValue<bool>("background-blur"); },
-        [mod] {
-            bool v = !mod->getSettingValue<bool>("background-blur");
-            mod->setSettingValue<bool>("background-blur", v);
-            return v;
-        }
-    );
-    blurRow->setTooltip("Applies the next time the menu loads.");
-    overlay->addRow(blurRow);
-    auto trianglesRow = ToggleRow::create(
-        "Background triangles", w, k,
-        [mod] { return mod->getSettingValue<bool>("background-triangles"); },
-        [mod] {
-            bool v = !mod->getSettingValue<bool>("background-triangles");
-            mod->setSettingValue<bool>("background-triangles", v);
-            return v;
-        }
-    );
-    trianglesRow->setTooltip("Applies the next time the menu loads.");
-    overlay->addRow(trianglesRow);
-
-    auto introRow = ToggleRow::create(
-        "Intro and outro", w, k,
-        [mod] { return mod->getSettingValue<bool>("intro"); },
-        [mod] {
-            bool v = !mod->getSettingValue<bool>("intro");
-            mod->setSettingValue<bool>("intro", v);
-            return v;
-        }
-    );
-    introRow->setTooltip("Animated intro when the game starts, and an outro when you quit.");
-    overlay->addRow(introRow);
-
-    overlay->addSubsection("Parallax");
-    // Slider 0..1 covers 0%..8%, in steps of 0.5%. Applies live: the menu reads it every frame.
-    auto parallaxRow = [&](char const* name, char const* key, char const* tooltip) {
-        auto row = SliderRow::create(
-            name, w, k,
-            [mod, key] { return static_cast<float>(mod->getSettingValue<double>(key) / 8.0); },
-            [mod, key](float v) { mod->setSettingValue<double>(key, std::round(v * 16) / 2.0); },
-            [](float v) { return fmt::format("{}%", std::round(v * 16) / 2.0); }
-        );
-        row->setTooltip(tooltip);
-        overlay->addRow(row);
-    };
-    parallaxRow("Background parallax", "parallax-background", "How far the background moves with the mouse (on phones, the tilt).");
-    parallaxRow("Menu parallax", "parallax-menu", "How far the main menu's buttons move. Less than the background makes them float over it.");
-#ifdef GEODE_IS_MOBILE
-    auto tiltRow = ToggleRow::create(
-        "Tilt parallax", w, k,
-        [mod] { return mod->getSettingValue<bool>("tilt-parallax"); },
-        [mod] {
-            bool v = !mod->getSettingValue<bool>("tilt-parallax");
-            mod->setSettingValue<bool>("tilt-parallax", v);
-            return v;
-        }
-    );
-    tiltRow->setTooltip("Move the menu with the phone's tilt (gyroscope and accelerometer).");
-    overlay->addRow(tiltRow);
-#endif
-
-    overlay->addSubsection("Music");
-    auto musicRow = ToggleRow::create(
-        "Play level songs in the menu", w, k,
-        [mod] { return mod->getSettingValue<bool>("music-player"); },
-        [mod] {
-            bool v = !mod->getSettingValue<bool>("music-player");
-            mod->setSettingValue<bool>("music-player", v);
-            return v;
-        }
-    );
-    musicRow->setTooltip("Plays your downloaded levels' songs instead of the menu theme, with the level's thumbnail as the background. Applies the next time the menu loads.");
-    overlay->addRow(musicRow);
-    auto unblockRow = ButtonRow::create("Unblock all songs", w, k, [] { MusicPlayer::get().unblockAll(); });
-    unblockRow->setTooltip("Songs you blocked in the music player (the ban button) can play again.");
-    unblockRow->setShownIf([] { return MusicPlayer::get().blockedCount() > 0; });
-    overlay->addRow(unblockRow);
-
-    overlay->addSubsection("Updates");
-    auto updatesRow = ToggleRow::create(
-        "Check for updates on start", w, k,
-        [mod] { return mod->getSettingValue<bool>("check-updates"); },
-        [mod] {
-            bool v = !mod->getSettingValue<bool>("check-updates");
-            mod->setSettingValue<bool>("check-updates", v);
-            return v;
-        }
-    );
-    updatesRow->setTooltip("Lazer UI isn't on the Geode index: it checks GitHub for new versions and offers to install them.");
-    overlay->addRow(updatesRow);
-    overlay->addRow(ButtonRow::create(fmt::format("Check for updates ({})", mod->getVersion().toVString()), w, k,
-                                      [] { updater::checkManually(); }));
-
-    overlay->addSubsection("Mods");
-    overlay->addRow(ButtonRow::create("All Lazer UI settings", w, k, [mod] { openSettingsPopup(mod); }));
-    overlay->addRow(ButtonRow::create("Geode mods", w, k, [] { openModsList(); }));
-
-    overlay->addSubsection("Classic");
-    overlay->addRow(ButtonRow::create("Open classic GD settings", w, k, [menu] { menu->onOptions(nullptr); }));
 
     overlay->finish();
 }

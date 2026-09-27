@@ -27,6 +27,7 @@ namespace sound {
     inline constexpr char const* CHECK_ON = "ui-check-on";
     inline constexpr char const* CHECK_OFF = "ui-check-off";
     inline constexpr char const* NOTCH_TICK = "ui-notch-tick";
+    inline constexpr char const* CURSOR_TAP = "ui-cursor-tap"; // MenuCursorContainer
 
     // SettingsPanel pops in with its own sample and out with the default one;
     // WaveContainer has its own pair.

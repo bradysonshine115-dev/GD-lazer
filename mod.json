@@ -40,6 +40,14 @@
 		"files": [
 			"resources/fonts/OFL.txt",
 			"resources/fonts/FontAwesome-LICENSE.txt",
+			"resources/fonts/sdf/outfit-regular-sdf.fnt",
+			"resources/fonts/sdf/outfit-regular-sdf.png",
+			"resources/fonts/sdf/outfit-semibold-sdf.fnt",
+			"resources/fonts/sdf/outfit-semibold-sdf.png",
+			"resources/fonts/sdf/outfit-bold-sdf.fnt",
+			"resources/fonts/sdf/outfit-bold-sdf.png",
+			"resources/fonts/sdf/icons-sdf.fnt",
+			"resources/fonts/sdf/icons-sdf.png",
 			"resources/sounds/osu-resources-LICENCE.md",
 			"resources/sounds/menu-back-to-logo.ogg",
 			"resources/sounds/menu-button-default-select.ogg",
@@ -57,6 +65,9 @@
 			"resources/sounds/ui-check-on.ogg",
 			"resources/sounds/ui-default-hover.ogg",
 			"resources/sounds/ui-default-select.ogg",
+			"resources/sounds/ui-cursor-tap.ogg",
+			"resources/cursor/menu-cursor.png",
+			"resources/cursor/menu-cursor-additive.png",
 			"resources/sounds/ui-notch-tick.ogg",
 			"resources/sounds/ui-overlay-big-pop-out.ogg",
 			"resources/sounds/ui-overlay-pop-in.ogg",
@@ -237,6 +248,35 @@
 			"description": "Move the menu with the phone's tilt (gyroscope and accelerometer).",
 			"default": true,
 			"platforms": ["android", "ios"]
+		},
+		"custom-cursor": {
+			"type": "bool",
+			"name": "osu! cursor",
+			"description": "Replace the mouse pointer with osu!'s menu cursor, which squashes, glows and taps when you click.",
+			"default": true,
+			"platforms": ["win"]
+		},
+		"cursor-size": {
+			"type": "float",
+			"name": "Cursor size",
+			"description": "Size of the osu! cursor.",
+			"default": 0.6,
+			"min": 0.5,
+			"max": 2,
+			"platforms": ["win"],
+			"control": {
+				"slider": true,
+				"slider-step": 0.1,
+				"arrows": false,
+				"input": true
+			}
+		},
+		"cursor-rotation": {
+			"type": "bool",
+			"name": "Rotate cursor when dragging",
+			"description": "The osu! cursor turns to follow the mouse while you drag.",
+			"default": true,
+			"platforms": ["win"]
 		}
 	}
 }

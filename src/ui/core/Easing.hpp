@@ -16,6 +16,7 @@ enum class Easing {
     OutExpo,
     OutElastic,
     OutElasticHalf,
+    OutElasticQuarter,
     In,
     InSine,
     OutSine,
@@ -37,6 +38,7 @@ namespace detail {
     inline const double EXPO_OFFSET = std::pow(2, -10);
     inline const double ELASTIC_OFFSET_FULL = std::pow(2, -11);
     inline const double ELASTIC_OFFSET_HALF = std::pow(2, -10) * std::sin((.5 - ELASTIC_CONST2) * ELASTIC_CONST);
+    inline const double ELASTIC_OFFSET_QUARTER = std::pow(2, -10) * std::sin((.25 - ELASTIC_CONST2) * ELASTIC_CONST);
 }
 
 // t in [0, 1] -> eased progress (may overshoot for elastic curves).
@@ -56,6 +58,9 @@ inline double ease(Easing e, double t) {
         case Easing::OutElasticHalf:
             return std::pow(2, -10 * t) * std::sin((.5 * t - ELASTIC_CONST2) * ELASTIC_CONST) + 1
                 - ELASTIC_OFFSET_HALF * t;
+        case Easing::OutElasticQuarter:
+            return std::pow(2, -10 * t) * std::sin((.25 * t - ELASTIC_CONST2) * ELASTIC_CONST) + 1
+                - ELASTIC_OFFSET_QUARTER * t;
         case Easing::In: return t * t;
         case Easing::InSine: return 1 - std::cos(t * PI * .5);
         case Easing::OutSine: return std::sin(t * PI * .5);

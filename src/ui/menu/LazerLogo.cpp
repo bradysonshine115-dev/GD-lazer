@@ -2,6 +2,7 @@
 
 #include "../../audio/AudioAnalyzer.hpp"
 #include "../../audio/Sfx.hpp"
+#include "../core/SharpIcon.hpp"
 #include "../core/Text.hpp"
 #include "../core/Theme.hpp"
 
@@ -30,7 +31,7 @@ CCNode* makeLogoIcon(PlayerPalette const& palette, float size) {
     player->disableGlowOutline();
     // A cube is ~30 units tall at scale 1.
     player->setScale(size / 30.f);
-    return player;
+    return SharpIcon::create(player);
 }
 
 LazerLogo* LazerLogo::create(float radius) {

@@ -3,6 +3,7 @@
 #include <Geode/Geode.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <vector>
 
 using namespace geode::prelude;
@@ -10,8 +11,92 @@ using namespace geode::prelude;
 namespace lazer {
 
 namespace {
+    // Must match SPREAD in tools/gen_sdf_fonts.py: atlas pixels of distance on
+    // each side of the outline.
+    constexpr float SDF_SPREAD = 6.f;
+    constexpr auto PROGRAM_KEY = "lazer.sdf-text";
+
+    constexpr auto VERT = R"(
+attribute vec4 a_position;
+attribute vec2 a_texCoord;
+attribute vec4 a_color;
+varying vec4 v_fragmentColor;
+varying vec2 v_texCoord;
+void main() {
+    gl_Position = CC_MVPMatrix * a_position;
+    v_fragmentColor = a_color;
+    v_texCoord = a_texCoord;
+}
+)";
+
+    // The atlas alpha is the distance field (0.5 on the outline). u_sharpness
+    // turns it into a one-screen-pixel-wide edge. Colours arrive premultiplied.
+    constexpr auto FRAG = R"(
+#ifdef GL_ES
+precision mediump float;
+#endif
+varying vec4 v_fragmentColor;
+varying vec2 v_texCoord;
+uniform sampler2D CC_Texture0;
+uniform float u_sharpness;
+void main() {
+    float d = texture2D(CC_Texture0, v_texCoord).a;
+    float a = clamp((d - 0.5) * u_sharpness + 0.5, 0.0, 1.0);
+    gl_FragColor = v_fragmentColor * a;
+}
+)";
+
+    CCGLProgram* sdfProgram() {
+        auto cache = CCShaderCache::sharedShaderCache();
+        if (auto p = cache->programForKey(PROGRAM_KEY)) return p;
+        auto p = new CCGLProgram();
+        p->initWithVertexShaderByteArray(VERT, FRAG);
+        p->addAttribute(kCCAttributeNamePosition, kCCVertexAttrib_Position);
+        p->addAttribute(kCCAttributeNameColor, kCCVertexAttrib_Color);
+        p->addAttribute(kCCAttributeNameTexCoord, kCCVertexAttrib_TexCoords);
+        p->link();
+        p->updateUniforms();
+        cache->addProgram(p, PROGRAM_KEY);
+        p->release();
+        return p;
+    }
+
+    // A bitmap-font label drawn from a distance-field atlas: crisp at any scale.
+    class SdfLabel : public CCLabelBMFont {
+    public:
+        static SdfLabel* create(std::string const& text, char const* font) {
+            auto ret = new SdfLabel();
+            if (ret->initWithString(text.c_str(), font)) {
+                ret->setShaderProgram(sdfProgram());
+                ret->autorelease();
+                return ret;
+            }
+            delete ret;
+            return nullptr;
+        }
+
+        void draw() override {
+            // Screen pixels per atlas pixel, so the edge stays a pixel wide.
+            auto t = this->nodeToWorldTransform();
+            float worldScale = std::sqrt(t.a * t.a + t.b * t.b);
+            float pxPerTexel = worldScale / CC_CONTENT_SCALE_FACTOR() * CCEGLView::sharedOpenGLView()->getScaleX();
+
+            auto program = this->getShaderProgram();
+            program->use();
+            // Looked up again after a re-link (a GL context reset gives a new program).
+            static GLuint s_program = 0;
+            static GLint s_location = -1;
+            if (s_program != program->getProgram()) {
+                s_program = program->getProgram();
+                s_location = glGetUniformLocation(s_program, "u_sharpness");
+            }
+            program->setUniformLocationWith1f(s_location, std::max(1.f, 2.f * SDF_SPREAD * pxPerTexel));
+            CCLabelBMFont::draw();
+        }
+    };
+
     CCLabelBMFont* makeLabel(std::string const& text, char const* font, float size) {
-        auto label = CCLabelBMFont::create(text.c_str(), font);
+        CCLabelBMFont* label = SdfLabel::create(text, font);
         // Scale by the font's line height rather than the text's bounds, so
         // every label of the same `size` gets the same scale.
         float lineHeight = label->getConfiguration()->m_nCommonHeight / CC_CONTENT_SCALE_FACTOR();
@@ -22,15 +107,15 @@ namespace {
 
 CCLabelBMFont* makeText(std::string const& text, Weight weight, float size) {
     switch (weight) {
-        case Weight::Regular: return makeLabel(text, "outfit-regular.fnt"_spr, size);
-        case Weight::SemiBold: return makeLabel(text, "outfit-semibold.fnt"_spr, size);
-        case Weight::Bold: return makeLabel(text, "outfit-bold.fnt"_spr, size);
+        case Weight::Regular: return makeLabel(text, "outfit-regular-sdf.fnt"_spr, size);
+        case Weight::SemiBold: return makeLabel(text, "outfit-semibold-sdf.fnt"_spr, size);
+        case Weight::Bold: return makeLabel(text, "outfit-bold-sdf.fnt"_spr, size);
     }
     return nullptr;
 }
 
 CCLabelBMFont* makeIcon(char const* glyph, float size) {
-    return makeLabel(glyph, "icons.fnt"_spr, size);
+    return makeLabel(glyph, "icons-sdf.fnt"_spr, size);
 }
 
 // Greedy word wrap using the label's own measurements.
