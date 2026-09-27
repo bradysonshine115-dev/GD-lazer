@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.5.1
+
+- <cr>**IMPORTANT (Android): if nothing below shows up after updating, update by hand once.**</c> Older versions of the updater change the version number but keep running the old code. Close Geometry Dash, download `kamol1dn.lazer-ui.geode` from github.com/kamol1dn/GD-lazer/releases, **delete** the old one in `Android/media/com.geode.launcher/game/geode/mods` and copy the new one in (don't just overwrite). After that, updates apply properly
+- Fixed: Enter and Space on the main menu opened GD's main levels; they now press the logo, like osu!
+- Fixed: the home button in the toolbar didn't close the open page; it now closes it, and goes back a menu when nothing is open
+- Fixed: Escape did nothing in song select
+- Fixed: closing friend requests, friends or messages from your profile opened a second profile page
+- Fixed: "view profile" in the account card did nothing while statistics, achievements, rewards or quests were open
+- Fixed: the settings (and other pages) stopped scrolling with the mouse wheel after another page had been opened
+- Stronger parallax by default: background 6% and menu 1.5% on PC, 8% and 2% on phones (reset the sliders in Settings > Lazer UI > Parallax to get the new values)
+
 ## v0.5.0
 
 - <cr>**IMPORTANT (Android): if nothing below shows up after updating, update by hand once.**</c> Older versions of the updater change the version number but keep running the old code. Close Geometry Dash, download `kamol1dn.lazer-ui.geode` from github.com/kamol1dn/GD-lazer/releases, **delete** the old one in `Android/media/com.geode.launcher/game/geode/mods` and copy the new one in (don't just overwrite). After that, updates apply properly

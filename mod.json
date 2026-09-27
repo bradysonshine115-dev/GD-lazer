@@ -7,7 +7,7 @@
 	"id": "kamol1dn.lazer-ui",
 	"early-load": true,
 	"name": "Lazer UI",
-	"version": "v0.5.0",
+	"version": "v0.5.1",
 	"developer": "Kamol1dn",
 	"description": "A smooth, music-reactive menu overhaul inspired by osu!lazer.",
 	"repository": "https://github.com/kamol1dn/GD-lazer",
@@ -207,7 +207,7 @@
 			"type": "float",
 			"name": "Background parallax",
 			"description": "How far the menu background follows the mouse (on phones, the tilt), in percent of the screen.",
-			"default": {"win": 2, "mac": 2, "android": 4, "ios": 4},
+			"default": {"win": 6, "mac": 6, "android": 8, "ios": 8},
 			"min": 0,
 			"max": 8,
 			"control": {
@@ -221,7 +221,7 @@
 			"type": "float",
 			"name": "Menu parallax",
 			"description": "How far the main menu's buttons follow the mouse (on phones, the tilt), in percent of the screen.",
-			"default": 1,
+			"default": {"win": 1.5, "mac": 1.5, "android": 2, "ios": 2},
 			"min": 0,
 			"max": 8,
 			"control": {
