@@ -104,6 +104,7 @@ namespace icon {
     constexpr auto RUNNING = "\xEF\x9C\x8C";        // f70c
     constexpr auto CALENDAR_DAY = "\xEF\x9E\x83";   // f783
     constexpr auto CALENDAR_WEEK = "\xEF\x9E\x84";  // f784
+    constexpr auto TRIANGLE_EXCLAMATION = "\xEF\x81\xB1"; // f071
 }
 
 cocos2d::CCLabelBMFont* makeIcon(char const* glyph, float size);

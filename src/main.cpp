@@ -21,6 +21,7 @@
 #include "ui/select/SongSelect.hpp"
 #include "update/Updater.hpp"
 #include "ui/overlays/AchievementsOverlay.hpp"
+#include "ui/overlays/Dialog.hpp"
 #include "ui/overlays/QuestsOverlay.hpp"
 #include "ui/overlays/RewardsOverlay.hpp"
 #include "ui/overlays/SettingsOverlay.hpp"
@@ -40,8 +41,7 @@ namespace {
     ButtonSystem::State g_returnState = ButtonSystem::State::Initial;
     // The intro plays once, on the first menu after the game starts.
     bool g_introPlayed = false;
-    // GD's "quit game?" popup, so its "yes" can play the outro first.
-    FLAlertLayer* g_quitAlert = nullptr;
+    // Quitting: the outro is playing.
     bool g_exiting = false;
 
     constexpr float OUTRO_MS = 3000; // IntroScreen.exit_delay
@@ -457,24 +457,22 @@ class $modify(LazerMenuLayer, MenuLayer) {
         // The back button: see keyBackClicked below.
         if (!sender && this->lazerBack()) return;
 #endif
-        MenuLayer::onQuit(sender);
-        // Remember GD's quit popup (the newest alert in the scene).
-        g_quitAlert = nullptr;
-        if (auto scene = CCDirector::get()->getRunningScene()) {
-            for (auto child : CCArrayExt<CCNode*>(scene->getChildren())) {
-                if (auto alert = typeinfo_cast<FLAlertLayer*>(child)) g_quitAlert = alert;
-            }
-        }
+        if (!Mod::get()->getSettingValue<bool>("enabled")) return MenuLayer::onQuit(sender);
+        if (g_exiting || lazer::Dialog::isOpen()) return;
+        // osu!'s ConfirmExitDialog in place of GD's quit popup.
+        Ref<MenuLayer> self = this;
+        lazer::Dialog::show(icon::TRIANGLE_EXCLAMATION, "Are you sure you want to exit Geometry Dash?", "Last chance to turn back", {
+            {"Let me out!", lazer::Dialog::Kind::Ok, [self] { static_cast<LazerMenuLayer*>(self.data())->quitGame(); }},
+            {"Just a little more...", lazer::Dialog::Kind::Cancel, nullptr},
+        });
     }
 
-    void FLAlert_Clicked(FLAlertLayer* layer, bool btn2) {
-        auto mod = Mod::get();
-        bool outro = btn2 && layer && layer == g_quitAlert && !g_exiting
-            && mod->getSettingValue<bool>("enabled") && mod->getSettingValue<bool>("intro");
-        g_quitAlert = nullptr;
-        if (!outro) return MenuLayer::FLAlert_Clicked(layer, btn2);
-
+    // Quits, after osu!'s outro (see you next time) when the intro is on.
+    void quitGame() {
+        if (g_exiting) return;
         g_exiting = true;
+        if (!Mod::get()->getSettingValue<bool>("intro")) return this->endGame();
+
         auto& f = m_fields;
         this->closeOverlaysExcept(nullptr);
         if (f->nowPlaying) f->nowPlaying->close();
@@ -482,12 +480,9 @@ class $modify(LazerMenuLayer, MenuLayer) {
         if (f->ticker) f->ticker->hide();
         if (f->buttons) f->buttons->playExit(OUTRO_MS);
 
-        Ref<FLAlertLayer> alert = layer;
         Ref<MenuLayer> self = this;
         float logoRadius = f->buttons ? f->buttons->logoRadius() : 0.f;
-        this->addChild(Outro::create(logoRadius, [self, alert] {
-            self->MenuLayer::FLAlert_Clicked(alert, true);
-        }), 1000);
+        this->addChild(Outro::create(logoRadius, [self] { self->endGame(); }), 1000);
     }
 
     void setupBackground() {
