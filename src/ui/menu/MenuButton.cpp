@@ -66,6 +66,11 @@ bool MenuButton::init(
     m_label = makeText(label, Weight::SemiBold, h * 0.2f);
     m_label->setAnchorPoint({0.5f, 0.f});
     m_label->setPosition({-h * 0.03f, -h / 2 + h * 0.07f});
+    // A narrowed button (a crowded menu) shrinks its label to fit.
+    float maxLabel = style.width * 0.9f;
+    if (float w = m_label->getScaledContentSize().width; w > maxLabel && w > 0) {
+        m_label->setScale(m_label->getScale() * maxLabel / w);
+    }
     m_content->addChild(m_label);
 
     m_lastBeat = AudioAnalyzer::get().beatIndex();

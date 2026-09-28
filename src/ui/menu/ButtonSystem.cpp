@@ -4,6 +4,7 @@
 #include "../core/Theme.hpp"
 
 #include <Geode/loader/Log.hpp>
+#include <algorithm>
 
 using namespace cocos2d;
 
@@ -62,15 +63,28 @@ bool ButtonSystem::init(std::vector<ButtonDef> buttons) {
 
     // "back", nearest the logo on the left, in every submenu.
     ButtonDef back {"back", icon::CIRCLE_CHEVRON_LEFT, BACK_COLOR, [this] { this->setState(State::TopLevel); }, false};
-    m_left.push_back({makeButton(back), State::Play, State::Browse});
+    m_left.push_back({makeButton(back, m_buttonWidth), State::Play, State::Browse});
+
+    // A crowded menu (browse) narrows its buttons so the last one still fits
+    // on the screen (osu! lets them run off), down to a limit.
+    float facadeHalf = m_logoRadius * LOGO_TOPLEVEL_SCALE * LOGO_FACADE_SCALE;
+    float room = win.width - (m_logoTarget.x + facadeHalf) - m_wedge;
+    auto widthFor = [&](State state) {
+        int count = 0;
+        for (auto const& def : buttons) if (def.visibleIn == state && !def.left) count++;
+        if (count <= 0) return m_buttonWidth;
+        float fit = (room - m_wedge) / count + m_wedge; // neighbours overlap by one wedge
+        return std::clamp(fit, m_buttonWidth * 0.7f, m_buttonWidth);
+    };
 
     // osu! flows the submenus' buttons before the top level's, so the top
     // level explodes outwards while a submenu unfolds from the logo.
     for (auto state : {State::Play, State::Create, State::Browse, State::TopLevel}) {
+        float width = widthFor(state);
         for (auto const& def : buttons) {
             if (def.visibleIn != state) continue;
             auto& side = def.left ? m_left : m_right;
-            side.push_back({makeButton(def), state, state});
+            side.push_back({makeButton(def, def.left ? m_buttonWidth : width), state, state});
         }
     }
 
@@ -84,12 +98,12 @@ bool ButtonSystem::init(std::vector<ButtonDef> buttons) {
     return true;
 }
 
-MenuButton* ButtonSystem::makeButton(ButtonDef const& def) {
+MenuButton* ButtonSystem::makeButton(ButtonDef const& def, float width) {
     auto action = def.action;
     bool leaves = def.leavesMenu;
     auto button = MenuButton::create(
         def.label, def.icon, def.color,
-        {m_buttonWidth, m_barHeight, m_wedge},
+        {width, m_barHeight, m_wedge},
         [this, action, leaves] {
             if (leaves) {
                 State from = m_state;

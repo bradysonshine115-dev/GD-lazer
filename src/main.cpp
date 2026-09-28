@@ -23,6 +23,7 @@
 #include "ui/core/MenuCursor.hpp"
 #include "ui/overlays/AchievementsOverlay.hpp"
 #include "ui/overlays/Dialog.hpp"
+#include "ui/overlays/LevelListingOverlay.hpp"
 #include "ui/overlays/QuestsOverlay.hpp"
 #include "ui/overlays/RewardsOverlay.hpp"
 #include "ui/overlays/SettingsOverlay.hpp"
@@ -362,7 +363,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         constexpr ccColor3B BROWSE_SUB {140, 180, 0};
         auto defaultSound = lazer::sfx::sound::MENU_DEFAULT_SELECT;
 
-        auto buttons = ButtonSystem::create({
+        std::vector<ButtonSystem::ButtonDef> defs {
             {"settings", icon::GEAR, {85, 85, 85}, [this] { this->toggleSettings(); }, false, defaultSound, State::TopLevel, true},
 
             {"play", icon::PLAY, {102, 68, 204}, open(State::Play), false, lazer::sfx::sound::MENU_PLAY_SELECT},
@@ -393,14 +394,29 @@ class $modify(LazerMenuLayer, MenuLayer) {
                 showScene(LevelBrowserLayer::scene(GJSearchObject::create(SearchType::MyLists)));
             }), true, defaultSound, State::Create},
 
-            // browse: other people's levels
-            {"search", icon::SEARCH, {165, 204, 0}, creator(State::Browse, &CreatorLayer::onOnlineLevels), true, defaultSound, State::Browse},
+            // browse: other people's levels, as our listing pages over GD's hidden browser
+            {"search", icon::SEARCH, {165, 204, 0}, leave(State::Browse, [] {
+                showScene(lazer::LevelListingOverlay::searchScene(""));
+            }), true, defaultSound, State::Browse},
             {"featured", icon::STAR, BROWSE_SUB, creator(State::Browse, &CreatorLayer::onFeaturedLevels), true, defaultSound, State::Browse},
             {"lists", icon::LAYERS, BROWSE_SUB, creator(State::Browse, &CreatorLayer::onTopLists), true, defaultSound, State::Browse},
             {"hall of fame", icon::AWARD, BROWSE_SUB, leave(State::Browse, [] {
-                showScene(LevelBrowserLayer::scene(GJSearchObject::create(SearchType::HallOfFame)));
+                showScene(lazer::LevelListingOverlay::pageScene(SearchType::HallOfFame));
             }), true, defaultSound, State::Browse},
-        });
+            {"magic", icon::WAND_MAGIC, BROWSE_SUB, leave(State::Browse, [] {
+                showScene(lazer::LevelListingOverlay::pageScene(SearchType::Magic));
+            }), true, defaultSound, State::Browse},
+            {"recent", icon::CLOCK, BROWSE_SUB, leave(State::Browse, [] {
+                showScene(lazer::LevelListingOverlay::pageScene(SearchType::Recent));
+            }), true, defaultSound, State::Browse},
+        };
+        // Levels sent for a rating: GD only shows that list to players with rating power.
+        if (GameManager::get()->m_hasRP.value() > 0) {
+            defs.push_back({"sent", icon::PAPER_PLANE, BROWSE_SUB, leave(State::Browse, [] {
+                showScene(lazer::LevelListingOverlay::pageScene(SearchType::Sent));
+            }), true, defaultSound, State::Browse});
+        }
+        auto buttons = ButtonSystem::create(std::move(defs));
         buttons->setID("button-system"_spr);
         this->addChild(buttons, 10);
         m_fields->buttons = buttons;
