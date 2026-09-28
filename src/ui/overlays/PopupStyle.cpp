@@ -166,7 +166,18 @@ namespace {
                 break;
             }
         }
-        if (button->m_label) restyleLabel(button->m_label);
+        if (auto label = button->m_label) {
+            restyleLabel(label);
+            // GD shrinks its wide bigFont to fit the button; Outfit is narrower,
+            // so it comes out too big: cap it (line height) at 60% of the button.
+            float cap = button->getContentSize().height * 0.6f;
+            float height = label->getScaledContentSize().height;
+            if (cap > 0 && height > cap) {
+                float f = cap / height;
+                label->setScaleX(label->getScaleX() * f);
+                label->setScaleY(label->getScaleY() * f);
+            }
+        }
     }
 
     void collect(CCNode* node, std::vector<CCNode*>& out) {
