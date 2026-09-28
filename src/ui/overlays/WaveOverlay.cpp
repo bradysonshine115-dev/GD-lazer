@@ -109,6 +109,11 @@ bool WaveOverlay::init(float topInset, theme::Scheme scheme, char const* icon,
     m_body->setContentSize({win.width, m_height - headerH});
     m_content->addChild(m_body, 2);
 
+    m_header = CCNode::create();
+    m_header->setContentSize({win.width, headerH});
+    m_header->setPosition({0, m_height - headerH});
+    m_content->addChild(m_header, 2);
+
     m_contentY.set(1.f);
     this->setVisible(false);
     this->scheduleUpdate();
@@ -147,6 +152,10 @@ void WaveOverlay::close() {
     for (size_t i = 0; i < m_waves.size(); i++) m_waveY[i].to(m_height, DISAPPEAR_DURATION, Easing::InSine);
     m_contentY.to(1.f, DISAPPEAR_DURATION, Easing::In);
     if (m_hovered) { m_hovered->setHovered(false); m_hovered = nullptr; }
+}
+
+float WaveOverlay::headerRight() const {
+    return m_closeButton->getPositionX() - m_closeButton->getContentSize().width / 2;
 }
 
 bool WaveOverlay::back() {
