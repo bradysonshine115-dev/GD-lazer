@@ -112,6 +112,7 @@
 	},
 	"dependencies": {
 		"prevter.imageplus": ">=1.0.0",
+		"geode.custom-keybinds": ">=2.2.0",
 		"weebify.separate_dual_icons": {
 			"version": ">=1.4.0",
 			"required": false
