@@ -1,6 +1,7 @@
 #include "LevelThumbnails.hpp"
 
 #include <Geode/Geode.hpp>
+#include <Geode/modify/GameManager.hpp>
 #include <Geode/ui/LazySprite.hpp>
 #include <Geode/utils/web.hpp>
 
@@ -50,8 +51,10 @@ namespace {
         state().decoding[id] = sprite;
         sprite->setLoadCallback([id, path, bundled](Result<> res) {
             auto& s = state();
-            Ref<LazySprite> sprite = s.decoding[id];
-            s.decoding.erase(id);
+            auto it = s.decoding.find(id);
+            if (it == s.decoding.end()) return; // dropped by a graphics reload
+            Ref<LazySprite> sprite = it->second;
+            s.decoding.erase(it);
             CCTexture2D* texture = res && sprite ? sprite->getTexture() : nullptr;
             if (!res) {
                 log::warn("Couldn't decode thumbnail for level {}: {}", id, res.unwrapErr());
@@ -133,3 +136,17 @@ void fetchFirst(std::vector<int> levelIDs, std::function<void(CCTexture2D*, int)
 }
 
 } // namespace lazer::thumbnails
+
+// Switching between fullscreen and windowed makes a new GL context: cached
+// textures from the old one are dead (drawn blank). Drop them while that
+// context is still there; they're decoded again from the disk cache. Waiting
+// callbacks belong to screens the reload tears down.
+class $modify(LazerThumbnailsReload, GameManager) {
+    void reloadAll(bool switchingModes, bool toFullscreen, bool borderless, bool fix, bool unused) {
+        auto& s = lazer::thumbnails::state();
+        s.textures.clear();
+        s.waiting.clear();
+        s.decoding.clear();
+        GameManager::reloadAll(switchingModes, toFullscreen, borderless, fix, unused);
+    }
+};

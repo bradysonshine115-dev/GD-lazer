@@ -10,6 +10,8 @@
 #ifdef GEODE_IS_WINDOWS
 
 #include <Geode/modify/CCEGLView.hpp>
+#include <Geode/modify/GameManager.hpp>
+#include <Geode/modify/MenuLayer.hpp>
 
 #include "../../audio/Sfx.hpp"
 #include "Easing.hpp"
@@ -240,6 +242,15 @@ namespace {
     // Not in the scene graph: visited by hand in swapBuffers. Kept for the
     // whole game (no release at exit, after cocos is gone).
     MenuCursor* g_cursor = nullptr;
+    // Dropped for a graphics reload, to be made again at the next menu.
+    bool g_dropped = false;
+
+    void createCursor() {
+        if (auto cursor = MenuCursor::create()) {
+            cursor->retain();
+            g_cursor = cursor;
+        }
+    }
 }
 
 } // namespace lazer
@@ -275,12 +286,36 @@ class $modify(LazerCursorView, CCEGLView) {
 // stutters, and a drawn cursor would stutter with it. The system cursor
 // stays until then.
 $on_game(Loaded) {
-    Loader::get()->queueInMainThread([] {
-        if (auto cursor = lazer::MenuCursor::create()) {
-            cursor->retain();
-            lazer::g_cursor = cursor;
-        }
-    });
+    Loader::get()->queueInMainThread([] { lazer::createCursor(); });
 }
+
+// Switching between fullscreen and windowed makes a new GL context and GD
+// reloads every texture: the cursor's would be dead (drawn black). Let it go
+// while the old context is still there, and show the system cursor meanwhile.
+class $modify(LazerCursorReload, GameManager) {
+    void reloadAll(bool switchingModes, bool toFullscreen, bool borderless, bool fix, bool unused) {
+        if (lazer::g_cursor) {
+            lazer::g_cursor->release();
+            lazer::g_cursor = nullptr;
+            lazer::g_dropped = true;
+            if (lazer::g_enabled) {
+                lazer::g_enabled = false;
+                CCEGLView::get()->showCursor(lazer::g_gdShowsCursor);
+            }
+        }
+        GameManager::reloadAll(switchingModes, toFullscreen, borderless, fix, unused);
+    }
+};
+
+class $modify(LazerCursorMenu, MenuLayer) {
+    bool init() {
+        if (!MenuLayer::init()) return false;
+        if (lazer::g_dropped) {
+            lazer::g_dropped = false;
+            Loader::get()->queueInMainThread([] { lazer::createCursor(); });
+        }
+        return true;
+    }
+};
 
 #endif
