@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.5.6
+
+- Menu sounds have their own volume now: Settings > Audio > Volume > Interface sounds is theirs alone, so with GD's SFX off the menus still make sound
+- Buttons other mods add to GD's creator hub (GDDP's Demon Progression, BetterInfo...) show up in the toolbar, since Lazer UI hides the hub
+
 ## v0.5.5
 
 - Song select has osu!'s scrollbar: drag it, or tap beside it to jump. Held, it widens, follows your finger and shows where you are in the list: the position, first letter, difficulty or progress, by the sort
