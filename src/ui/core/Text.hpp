@@ -45,12 +45,15 @@ namespace icon {
     constexpr auto PLUS = "\xEF\x81\xA7";           // f067
     constexpr auto GIFT = "\xEF\x81\xAB";           // f06b
     constexpr auto EYE = "\xEF\x81\xAE";            // f06e
+    constexpr auto TRIANGLE_EXCLAMATION = "\xEF\x81\xB1";// f071
     constexpr auto SHUFFLE = "\xEF\x81\xB4";        // f074
+    constexpr auto CHEVRON_DOWN = "\xEF\x81\xB8";   // f078
     constexpr auto FOLDER = "\xEF\x81\xBB";         // f07b
     constexpr auto FOLDER_OPEN = "\xEF\x81\xBC";    // f07c
     constexpr auto CHART = "\xEF\x82\x80";          // f080
     constexpr auto KEY = "\xEF\x82\x84";            // f084
     constexpr auto GEARS = "\xEF\x82\x85";          // f085
+    constexpr auto COMMENTS = "\xEF\x82\x86";       // f086
     constexpr auto TROPHY = "\xEF\x82\x91";         // f091
     constexpr auto GLOBE = "\xEF\x82\xAC";          // f0ac
     constexpr auto WRENCH = "\xEF\x82\xAD";         // f0ad
@@ -76,6 +79,7 @@ namespace icon {
     constexpr auto THUMBS_DOWN = "\xEF\x85\xA5";    // f165
     constexpr auto MOON = "\xEF\x86\x86";           // f186
     constexpr auto CUBE = "\xEF\x86\xB2";           // f1b2
+    constexpr auto CIRCLE_NOTCH = "\xEF\x87\x8E";   // f1ce
     constexpr auto SLIDERS = "\xEF\x87\x9E";        // f1de
     constexpr auto BELL_SLASH = "\xEF\x87\xB6";     // f1f6
     constexpr auto TRASH = "\xEF\x87\xB8";          // f1f8
@@ -104,7 +108,6 @@ namespace icon {
     constexpr auto RUNNING = "\xEF\x9C\x8C";        // f70c
     constexpr auto CALENDAR_DAY = "\xEF\x9E\x83";   // f783
     constexpr auto CALENDAR_WEEK = "\xEF\x9E\x84";  // f784
-    constexpr auto TRIANGLE_EXCLAMATION = "\xEF\x81\xB1"; // f071
 }
 
 cocos2d::CCLabelBMFont* makeIcon(char const* glyph, float size);

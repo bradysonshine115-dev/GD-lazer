@@ -6,6 +6,7 @@
 #include "../core/Text.hpp"
 #include "../core/Theme.hpp"
 #include "../menu/MenuBackground.hpp"
+#include "../overlays/CommentsOverlay.hpp"
 #include "../overlays/Dialog.hpp"
 
 #include <Geode/modify/GameManager.hpp>
@@ -1565,6 +1566,13 @@ void SongSelect::buildDetails(float top, float bottom) {
     });
     y -= 40 * k;
 
+    // Comments: the osu!-style page. RobTop's levels have none online.
+    if (!e.official) {
+        section("comments");
+        button(icon::COMMENTS, "show comments", TAB, [this] { this->openComments(); });
+        y -= 40 * k;
+    }
+
     // Leaderboard: loading it uploads your best to GD's servers, so only on request.
     if (!e.official) {
         section("leaderboard");
@@ -1742,6 +1750,14 @@ void SongSelect::loadLeaderboard() {
                              e.platformer ? LevelLeaderboardMode::Time : LevelLeaderboardMode::Time);
 }
 
+void SongSelect::openComments() {
+    if (!m_hasSelection || m_starting) return;
+    auto const& e = m_entries[m_visible[m_selected]];
+    if (e.official) return;
+    closeFolders();
+    CommentsOverlay::present(e.level);
+}
+
 void SongSelect::loadLeaderboardFinished(CCArray* scores, char const*) {
     auto glm = GameLevelManager::sharedState();
     if (glm->m_leaderboardManagerDelegate == this) glm->m_leaderboardManagerDelegate = nullptr;
@@ -1893,7 +1909,8 @@ void SongSelect::updateCarousel(float dt) {
             if (p.active.target() != (selected ? 1.f : 0.f)) p.active.to(selected ? 1.f : 0.f, 400, Easing::OutQuint);
 
             p.root->setPosition({colLeft + offset - p.active.get() * ACTIVE_X * k, y});
-            bool hovered = !m_dragging && mouse.y > m_carouselBottom && mouse.y < m_carouselTop && containsWorld(p.root, mouse);
+            bool hovered = !m_dragging && !g_overlayOpen && mouse.y > m_carouselBottom && mouse.y < m_carouselTop
+                && containsWorld(p.root, mouse);
             if (hovered != p.hovered) {
                 p.hovered = hovered;
                 p.hover.to(hovered ? 1.f : 0.f, hovered ? 100 : 500, Easing::OutQuint);
@@ -2052,11 +2069,17 @@ void SongSelect::update(float dt) {
     // GD's mouse dispatcher only feeds its newest delegate, and GD's song widget
     // (or mods extending it) can register one: take the wheel back now and then.
     m_wheelClaimMs += ms;
-    if (m_wheelClaimMs > 500) {
+    if (m_wheelClaimMs > 500 && !g_overlayOpen) {
         m_wheelClaimMs = 0;
         auto dispatcher = CCDirector::get()->getMouseDispatcher();
         dispatcher->removeDelegate(this);
         dispatcher->addDelegate(this);
+    }
+    // An overlay (the comments page) covers everything: the search box mustn't
+    // take taps through it, and nothing here hovers.
+    if (m_search && m_searchEnabled == g_overlayOpen) {
+        m_searchEnabled = !g_overlayOpen;
+        m_search->setEnabled(m_searchEnabled);
     }
     // Playing: only the loader animates; song select is frozen and fading.
     if (m_starting) {
@@ -2080,7 +2103,7 @@ void SongSelect::update(float dt) {
 
     auto mouse = geode::cocos::getMousePos();
     auto updateButton = [&](Button& b) {
-        bool hovered = hittable(b, mouse);
+        bool hovered = !g_overlayOpen && hittable(b, mouse);
         if (hovered != b.hovered) {
             b.hovered = hovered;
             b.hover.to(hovered ? 1.f : 0.f, hovered ? 100 : 400, Easing::OutQuint);
@@ -2130,6 +2153,8 @@ SongSelect::Button* SongSelect::buttonAt(CCPoint world) {
 
 bool SongSelect::ccTouchBegan(CCTouch* touch, CCEvent*) {
     auto loc = touch->getLocation();
+    // An overlay is open over song select: its own text box may want the touch.
+    if (g_overlayOpen) return false;
     // Let the search field take its own touches.
     if (m_search && containsWorld(m_search, loc)) return false;
     if (m_starting) return true;
@@ -2229,7 +2254,7 @@ void SongSelect::ccTouchEnded(CCTouch* touch, CCEvent*) {
 }
 
 void SongSelect::scrollWheel(float y, float) {
-    if (m_starting || Dialog::isOpen()) return;
+    if (m_starting || Dialog::isOpen() || g_overlayOpen) return;
     // Left side: the level details; right side: the carousel.
     if (geode::cocos::getMousePos().x < m_win.width - m_rightW) {
         if (m_details) m_details->scrollWheel(y, 0);
@@ -2241,7 +2266,8 @@ void SongSelect::scrollWheel(float y, float) {
 }
 
 void SongSelect::keyDown(enumKeyCodes key, double timestamp) {
-    if (Dialog::isOpen()) return;
+    // A dialog or an overlay (the comments page) has the keys, and handles Escape itself.
+    if (Dialog::isOpen() || g_overlayOpen) return;
     // GD's CCLayer::keyDown turns Escape into keyBackClicked: let it through.
     if (!m_hasSelection || m_starting) return CCLayer::keyDown(key, timestamp);
     switch (key) {
@@ -2270,7 +2296,7 @@ void SongSelect::keyDown(enumKeyCodes key, double timestamp) {
 }
 
 void SongSelect::keyBackClicked() {
-    if (Dialog::isOpen()) return;
+    if (Dialog::isOpen() || g_overlayOpen) return;
     // During the loader, back cancels it (osu!'s back button does the same).
     if (m_starting) return cancelLoader();
     back();
