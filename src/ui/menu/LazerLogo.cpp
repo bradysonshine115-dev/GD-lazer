@@ -150,7 +150,7 @@ void LazerLogo::update(float dt) {
         if (m_beatSecondPhaseMs < 0) m_beatScale.to(1, m_beatLength * 2, Easing::OutQuint);
     }
 
-    bool hovered = this->isVisible() && !g_overlayOpen && containsWorldPoint(geode::cocos::getMousePos());
+    bool hovered = this->isVisible() && !menuBlocked() && containsWorldPoint(geode::cocos::getMousePos());
     if (hovered != m_hovered) {
         m_hovered = hovered;
         m_hoverScale.to(hovered ? 1.1f : 1.f, 500, Easing::OutElastic);
@@ -189,7 +189,7 @@ void LazerLogo::playImpact() {
 }
 
 bool LazerLogo::ccTouchBegan(CCTouch* touch, CCEvent*) {
-    if (!this->isVisible() || g_overlayOpen || !containsWorldPoint(touch->getLocation())) return false;
+    if (!this->isVisible() || menuBlocked() || !containsWorldPoint(touch->getLocation())) return false;
     m_pressed = true;
     m_bounceScale.to(0.9f, 1000, Easing::Out);
     return true;

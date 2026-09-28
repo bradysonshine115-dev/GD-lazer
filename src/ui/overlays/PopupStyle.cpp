@@ -156,6 +156,16 @@ namespace {
     }
 }
 
+bool popupOnTop() {
+    auto scene = CCDirector::get()->getRunningScene();
+    if (!scene) return false;
+    for (auto child : CCArrayExt<CCNode*>(scene->getChildren())) {
+        if (!child->isVisible() || child->getUserObject("hidden"_spr)) continue;
+        if (typeinfo_cast<FLAlertLayer*>(child) || typeinfo_cast<GJDropDownLayer*>(child)) return true;
+    }
+    return false;
+}
+
 class $modify(LazerPopup, FLAlertLayer) {
     struct Fields {
         bool styled = false;

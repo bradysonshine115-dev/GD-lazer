@@ -76,6 +76,14 @@ inline float unitScale() {
 // stops reacting to hover. Touches are already swallowed by the overlay.
 inline bool g_overlayOpen = false;
 
+// A GD popup (or another mod's) is open over the current scene: the daily page,
+// gauntlets, alerts. Their touch priority doesn't cover our menu's own
+// delegates, so the menu checks this itself. Pages we run hidden don't count.
+bool popupOnTop();
+
+// The main menu's logo and buttons ignore hover and clicks.
+inline bool menuBlocked() { return g_overlayOpen || popupOnTop(); }
+
 // Open floating cards (account, now playing). They're drawn over the full
 // overlays, but an overlay built while a GD popup exists (the hidden rewards /
 // quests pages) gets GD's forced touch priority and would take their touches

@@ -111,7 +111,7 @@ void MenuButton::setState(State state, int contractStyle) {
 }
 
 bool MenuButton::acceptsInput() {
-    return m_state == State::Expanded && this->isVisible() && !g_overlayOpen
+    return m_state == State::Expanded && this->isVisible() && !menuBlocked()
         && m_width.get() / m_style.width >= 0.8f;
 }
 

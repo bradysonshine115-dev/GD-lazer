@@ -137,7 +137,8 @@ bool ToolbarButton::containsWorldPoint(CCPoint p) {
 
 // Only interactive while actually on screen.
 bool ToolbarButton::interactive() {
-    bool visible = m_enabled;
+    // Not under a GD popup. Our own overlays keep the toolbar, like osu!.
+    bool visible = m_enabled && !popupOnTop();
     for (CCNode* n = this; n && visible; n = n->getParent()) visible = n->isVisible();
     return visible;
 }

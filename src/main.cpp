@@ -705,7 +705,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         bool select = key == KEY_Enter || key == KEY_NumEnter || key == KEY_Space;
         if (!f->buttons || !select) return MenuLayer::keyDown(key, timestamp);
         auto intro = typeinfo_cast<lazer::IntroSequence*>(this->getChildByID("intro"_spr));
-        bool busy = g_exiting || lazer::g_overlayOpen || (intro && !intro->revealed())
+        bool busy = g_exiting || lazer::menuBlocked() || (intro && !intro->revealed())
             || (f->nowPlaying && f->nowPlaying->isOpen()) || (f->account && f->account->isOpen());
         if (!busy) f->buttons->pressLogo();
     }
