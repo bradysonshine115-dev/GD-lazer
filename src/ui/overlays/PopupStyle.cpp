@@ -6,6 +6,7 @@
 #include "../core/RoundedBox.hpp"
 #include "../core/Text.hpp"
 #include "../core/Theme.hpp"
+#include "Dialog.hpp"
 
 #include <Geode/Geode.hpp>
 #include <Geode/modify/FLAlertLayer.hpp>
@@ -237,7 +238,7 @@ bool popupOnTop() {
     if (!scene) return false;
     for (auto child : CCArrayExt<CCNode*>(scene->getChildren())) {
         if (!child->isVisible() || child->getUserObject("hidden"_spr)) continue;
-        if (typeinfo_cast<FLAlertLayer*>(child) || typeinfo_cast<GJDropDownLayer*>(child)) return true;
+        if (typeinfo_cast<FLAlertLayer*>(child) || typeinfo_cast<GJDropDownLayer*>(child) || typeinfo_cast<Dialog*>(child)) return true;
     }
     return false;
 }

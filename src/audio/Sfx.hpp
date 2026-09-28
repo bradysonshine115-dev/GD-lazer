@@ -36,6 +36,13 @@ namespace sound {
     inline constexpr char const* OVERLAY_POP_OUT = "ui-overlay-pop-out";
     inline constexpr char const* WAVE_POP_IN = "ui-wave-pop-in";
     inline constexpr char const* WAVE_POP_OUT = "ui-overlay-big-pop-out";
+    // DialogOverlay / PopupDialog buttons.
+    inline constexpr char const* DIALOG_POP_IN = "ui-dialog-pop-in";
+    inline constexpr char const* DIALOG_POP_OUT = "ui-dialog-pop-out";
+    inline constexpr char const* DIALOG_OK_SELECT = "ui-dialog-ok-select";
+    inline constexpr char const* DIALOG_CANCEL_SELECT = "ui-dialog-cancel-select";
+    inline constexpr char const* DIALOG_DANGEROUS_TICK = "ui-dialog-dangerous-tick";
+    inline constexpr char const* DIALOG_DANGEROUS_SELECT = "ui-dialog-dangerous-select";
 }
 
 // Intro / outro audio, from osu-resources: the triangles theme's opening
