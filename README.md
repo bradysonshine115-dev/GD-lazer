@@ -77,6 +77,10 @@ It replaces GD's menus, not its gameplay. GD's own screens and handlers still ru
 - Account card and a redesigned profile page for any player
 - GD's popups restyled to match
 
+**Pause and level complete**
+- The pause menu is osu!'s: a big "paused" title, continue / retry / quit as wide buttons, the retry count and your progress. Practice mode, restarting from the start, edit, the level options, volume and other mods' pause buttons sit in a row underneath
+- Finishing a level (or finishing it in practice) shows an osu!-style results card with the level, its creator, your attempts, jumps and time, a "new best" badge on a first clear, GD's reward and coin animations, and retry / menu / edit / leaderboard buttons
+
 **Startup and exit**
 - Black loading screen with a spinner, then an animated intro while the first song fades in
 - Outro when quitting
@@ -101,7 +105,7 @@ None of these are required. The matching extras appear when a mod is installed.
 - **`early-load`** is set so the mod can restyle GD's loading screen from its first frame. Nothing else runs early. At that point the mod's own resources aren't loaded yet, so the loading screen is drawn entirely in code.
 - **GD layers run hidden.** Several overlays drive GD's own layers (RewardsPage, ChallengesPage, ProfilePage, AccountLayer, CreatorLayer...) kept hidden and non-interactive, and call their handlers. GD's logic, networking and saving are never reimplemented.
 - **Networking:** level thumbnails, fetched from the Level Thumbnails community server (`levelthumbs.prevter.me`) and cached on disk, and the update check: `mod.json` and `changelog.md` from this repo's `main` branch, plus the GitHub release when you choose to update. No accounts, analytics or other requests.
-- **Settings:** everything can be switched off. `enabled` turns the whole mod off; the intro/outro, music player, popup restyle, profile restyle, background dim, blur and triangles each have their own toggle.
+- **Settings:** everything can be switched off. `enabled` turns the whole mod off; the intro/outro, music player, popup restyle, profile restyle, pause and results restyle, background dim, blur and triangles each have their own toggle.
 
 ## Building
 

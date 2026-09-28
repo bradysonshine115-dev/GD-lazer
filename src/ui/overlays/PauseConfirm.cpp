@@ -1,8 +1,10 @@
-// The pause menu's "exit level?" check (GD's Confirm Exit option) as one of
-// osu!'s dialogs instead of GD's alert.
+// GD's pause menu as osu!'s pause overlay (PauseMenu), and its "exit
+// level?" check (GD's Confirm Exit option) as one of osu!'s dialogs instead
+// of GD's alert.
 
 #include "../core/Text.hpp"
 #include "Dialog.hpp"
+#include "PauseMenu.hpp"
 
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PauseLayer.hpp>
@@ -15,6 +17,25 @@ namespace {
 }
 
 class $modify(LazerPauseLayer, PauseLayer) {
+    struct Fields {
+        lazer::PauseMenu* menu = nullptr;
+    };
+
+    static void onModify(auto& self) {
+        // Straight after GD's own setup, before other mods add theirs: only
+        // GD's nodes get hidden, and mods' buttons are gathered a frame later.
+        (void)self.setHookPriorityPost("PauseLayer::customSetup", Priority::VeryEarlyPost);
+    }
+
+    void customSetup() {
+        PauseLayer::customSetup();
+        if (!Mod::get()->getSettingValue<bool>("restyle-gameplay")) return;
+        auto menu = lazer::PauseMenu::create(this);
+        if (!menu) return;
+        this->addChild(menu, 100);
+        m_fields->menu = menu;
+    }
+
     void tryQuit(CCObject* sender) {
         if (!Mod::get()->getSettingValue<bool>("enabled") || !GameManager::get()->getGameVariable(CONFIRM_EXIT)) {
             return PauseLayer::tryQuit(sender);
@@ -38,6 +59,10 @@ class $modify(LazerPauseLayer, PauseLayer) {
 
     void keyDown(enumKeyCodes key, double timestamp) {
         if (lazer::Dialog::isOpen()) return;
+        // Up / down / enter pick and press osu!'s buttons; the rest (Escape,
+        // space, other mods' keybinds) stay GD's. Pressing one may close the
+        // menu: nothing after it.
+        if (auto menu = m_fields->menu; menu && menu->handleKey(key)) return;
         PauseLayer::keyDown(key, timestamp);
     }
 };

@@ -149,6 +149,12 @@
 			"description": "Give GD's popups (rewards, confirmations, info boxes...) the dark osu!-style look. Other mods' popups are left alone.",
 			"default": true
 		},
+		"restyle-gameplay": {
+			"type": "bool",
+			"name": "Lazer pause and results",
+			"description": "Show the pause menu and the level complete screen the osu! way. GD's options and other mods' pause buttons stay reachable from them.",
+			"default": true
+		},
 		"restyle-profiles": {
 			"type": "bool",
 			"name": "Lazer profiles",
