@@ -333,7 +333,7 @@ namespace {
             band->setAnchorPoint({0.5f, 0.5f});
             band->setPosition({width / 2, y - REWARDS_HEIGHT * u / 2});
             column->addChild(band, 1);
-            m_rewardsCentre = {width / 2, y - REWARDS_HEIGHT * u / 2};
+            m_rewardsCentre = CCPoint {width / 2, y - REWARDS_HEIGHT * u / 2};
             y -= REWARDS_HEIGHT * u;
         }
 
