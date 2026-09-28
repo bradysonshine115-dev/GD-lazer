@@ -40,6 +40,9 @@ public:
     // Set while the player came from song select, so leaving gameplay or GD's
     // level page returns here instead of GD's own screens.
     static bool& returnsHere();
+    // Set while the player went from song select to GD's online screens: going
+    // back to GD's creator hub from them returns here (see main.cpp).
+    static bool& browsingOnline();
 
     void update(float dt) override;
     void onEnter() override;
@@ -79,12 +82,13 @@ protected:
 
     struct Panel {
         size_t entry;
-        cocos2d::CCNode* root;
+        cocos2d::CCNodeRGBA* root;
         RoundedBox* bg;
         RoundedBox* thumb;
         Tweened<float> active {0.f};
         Tweened<float> hover {0.f};
         Tweened<float> thumbAlpha {0.f};
+        Tweened<float> appear {0.f};  // fade in once built
         bool hovered = false;
         bool seen = false;        // still in view this frame
         float visibleMs = 0;      // thumbnails load once a panel has settled in view
@@ -103,14 +107,17 @@ protected:
     };
 
     bool init(levels::Kind kind, bool fromMenu);
-    // Selects a level using the song at `path` (clearing the filters if they hide it).
-    bool selectSong(std::string const& path);
+    // Selects a level using the song at `path`, whose song ID (MusicPlayer's) is
+    // `songID` (clearing the filters if they hide it).
+    bool selectSong(std::string const& path, int songID);
     void buildFilter();
     void buildFooter();
     Button& addButton(std::vector<Button>& list, cocos2d::CCNode* parent, char const* glyph, std::string const& label,
                       cocos2d::CCPoint pos, float height, cocos2d::ccColor4B color, std::function<void()> action,
                       float skew = 0.f);
     void applyFilter();
+    // Reads the levels again (after deleting some) and re-applies the filters.
+    void reloadEntries();
     void select(size_t visibleIndex, bool scroll = true);
     void selectRandom();
     // Play: osu!'s PlayerLoader, then the level.
@@ -130,6 +137,9 @@ protected:
     // Fades a node tree, relative to each node's opacity when first faded.
     void setTreeOpacity(cocos2d::CCNode* node, float factor);
     void openLevelPage();
+    // GD's online search, with the search text: its search screen, or straight
+    // to the results (`results`, from the no-results placeholder).
+    void browseOnline(bool results);
     void back();
     void toggleFolders();
     void closeFolders();

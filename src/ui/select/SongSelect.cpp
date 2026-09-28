@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cmath>
 #include <random>
+#include <unordered_map>
 
 using namespace geode::prelude;
 
@@ -42,6 +43,11 @@ namespace {
     constexpr float SHEAR = 0.2f;        // OsuGame.SHEAR
     constexpr float PREVIEW_DELAY = 150; // SongSelect.SELECTION_DEBOUNCE
     constexpr float THUMB_DELAY = 150;
+    // Panels built per frame, nearest the middle of the view first: a fast
+    // scroll through thousands of levels builds a few at a time instead of a
+    // screenful in one frame. New ones fade in (Panel.PrepareForUse).
+    constexpr int PANEL_LOADS_PER_FRAME = 3;
+    constexpr float PANEL_FADE = 400;    // Panel.DURATION
     constexpr double SCROLL_DECAY = 0.989;
     constexpr float BACKGROUND_DIM = 0.55f;
     constexpr float LOADER_DIM = 0.3f;       // the loader shows the background more (osu! un-dims it)
@@ -131,7 +137,8 @@ namespace {
 
     // A small horizontal run of icon + text pairs.
     CCNode* infoRow(std::vector<std::pair<char const*, std::string>> const& items, float size, ccColor3B color) {
-        auto row = CCNode::create();
+        auto row = CCNodeRGBA::create();
+        row->setCascadeOpacityEnabled(true);
         float x = 0;
         for (auto const& [glyph, text] : items) {
             if (glyph) {
@@ -165,6 +172,7 @@ namespace {
     CCNode* difficultyFace(levels::Entry const& e, float size) {
         auto face = GJDifficultySprite::create(e.difficulty, GJDifficultyName::Short);
         if (!e.official) face->updateFeatureState(featureState(e.level));
+        face->setCascadeOpacityEnabled(true); // the feature glow fades with it
         auto s = face->getContentSize();
         face->setScale(size / std::max(1.f, std::max(s.width, s.height)));
         return face;
@@ -172,9 +180,10 @@ namespace {
 
     // RobTop's levels have bundled screenshots (their IDs mean other levels
     // online); saved levels come from the Level Thumbnails server.
-    void levelThumbnail(levels::Entry const& e, std::function<void(CCTexture2D*)> callback) {
-        if (e.official) thumbnails::fetchOfficial(e.id, std::move(callback));
-        else thumbnails::fetch(e.id, std::move(callback));
+    void levelThumbnail(levels::Entry const& e, std::function<void(CCTexture2D*)> callback,
+                        std::function<bool()> wanted = nullptr) {
+        if (e.official) thumbnails::fetchOfficial(e.id, std::move(callback), std::move(wanted));
+        else thumbnails::fetch(e.id, std::move(callback), std::move(wanted));
     }
 
     bool containsWorld(CCNode* node, CCPoint world) {
@@ -185,6 +194,11 @@ namespace {
 }
 
 bool& SongSelect::returnsHere() {
+    static bool value = false;
+    return value;
+}
+
+bool& SongSelect::browsingOnline() {
     static bool value = false;
     return value;
 }
@@ -215,6 +229,7 @@ bool SongSelect::init(levels::Kind kind, bool fromMenu) {
     if (!CCLayer::init()) return false;
     m_kind = kind;
     g_lastKind = kind;
+    browsingOnline() = false;
     m_win = CCDirector::get()->getWinSize();
     m_k = unitScale();
     float k = m_k;
@@ -279,8 +294,10 @@ bool SongSelect::init(levels::Kind kind, bool fromMenu) {
     log::info("Song select: {} {} levels", m_entries.size(), m_kind == levels::Kind::Platformer ? "platformer" : "classic");
     // Coming from the menu, its song carries on and picks the selection (osu!
     // selects the playing beatmap). Back from a level, the last selection stays.
+    auto track = MusicPlayer::get().current();
+    int playingID = track ? track->songID : 0;
     std::string playing = fromMenu ? MusicPlayer::get().handOff() : "";
-    if (playing.empty() || !selectSong(playing)) applyFilter();
+    if (playing.empty() || !selectSong(playing, playingID)) applyFilter();
     m_scroll = m_scrollTarget;
 
     this->setTouchEnabled(true);
@@ -452,8 +469,7 @@ void SongSelect::confirmDeleteUnhearted() {
                     count, count == 1 ? "" : "s"), {
         {"Yes. Go for it.", Dialog::Kind::Dangerous, [self] {
             levels::deleteUnhearted();
-            self->m_entries = levels::all(self->m_kind);
-            self->applyFilter();
+            self->reloadEntries();
         }},
         {"No! Abort mission", Dialog::Kind::Cancel, nullptr},
     });
@@ -481,8 +497,7 @@ void SongSelect::confirmDeleteLevel() {
                 self->m_hasSelection = true;
             }
             levels::deleteLevel(deleted);
-            entries = levels::all(self->m_kind);
-            self->applyFilter();
+            self->reloadEntries();
         }},
         {"No! Abort mission", Dialog::Kind::Cancel, nullptr},
     });
@@ -501,6 +516,9 @@ void SongSelect::buildFooter() {
     float x = back.node->getPositionX() + back.node->getContentSize().width + 14 * k;
     auto& random = addButton(m_buttons, this, icon::SHUFFLE, "random", {x, y}, h, TAB, [this] { this->selectRandom(); }, skewDegrees());
     x += random.node->getContentSize().width + 10 * k;
+    // Online levels: GD's search, with what's typed here already in it.
+    auto& browse = addButton(m_buttons, this, icon::GLOBE, "browse", {x, y}, h, TAB, [this] { this->browseOnline(false); }, skewDegrees());
+    x += browse.node->getContentSize().width + 10 * k;
     auto& page = addButton(m_buttons, this, icon::CIRCLE_INFO, "level page", {x, y}, h, TAB, [this] { this->openLevelPage(); }, skewDegrees());
     x += page.node->getContentSize().width + 10 * k;
     addButton(m_buttons, this, icon::TRASH, "delete unhearted", {x, y}, h, TAB, [this] { this->confirmDeleteUnhearted(); }, skewDegrees());
@@ -599,9 +617,18 @@ void SongSelect::applyFilter() {
             break;
     }
 
-    // Indices changed: rebuild the visible panels.
-    for (auto& [index, panel] : m_panels) panel.root->removeFromParent();
+    // Indices changed: panels still in the list move to their new index (no
+    // fade in again while typing), the rest go.
+    std::unordered_map<size_t, Panel> byEntry;
+    for (auto& [index, panel] : m_panels) byEntry.emplace(panel.entry, std::move(panel));
     m_panels.clear();
+    for (size_t i = 0; i < m_visible.size() && !byEntry.empty(); i++) {
+        auto it = byEntry.find(m_visible[i]);
+        if (it == byEntry.end()) continue;
+        m_panels.emplace(i, std::move(it->second));
+        byEntry.erase(it);
+    }
+    for (auto& [entry, panel] : byEntry) panel.root->removeFromParent();
 
     for (size_t i = 0; i < m_tabs.size(); i++) m_tabs[i].selected = static_cast<int>(m_group) == static_cast<int>(i);
     // RobTop's levels aren't in folders.
@@ -639,6 +666,14 @@ void SongSelect::applyFilter() {
     select(index);
 }
 
+void SongSelect::reloadEntries() {
+    // Entry indices change: no panel can be reused.
+    for (auto& [index, panel] : m_panels) panel.root->removeFromParent();
+    m_panels.clear();
+    m_entries = levels::all(m_kind);
+    applyFilter();
+}
+
 float SongSelect::itemTop(size_t visibleIndex) const {
     return visibleIndex * (m_panelH + m_spacing);
 }
@@ -657,6 +692,8 @@ void SongSelect::select(size_t visibleIndex, bool scroll) {
     if (scroll) m_scrollTarget = itemTop(visibleIndex) + m_panelH / 2 - viewHeight() / 2;
     if (!changed) return;
 
+    // Song and coins for the details, the preview and play.
+    levels::resolve(m_entries[m_visible[visibleIndex]]);
     auto const& e = m_entries[m_visible[visibleIndex]];
     remembered().selectedId = e.id;
     remembered().selectedOfficial = e.official;
@@ -672,11 +709,14 @@ void SongSelect::select(size_t visibleIndex, bool scroll) {
     });
 }
 
-bool SongSelect::selectSong(std::string const& path) {
+bool SongSelect::selectSong(std::string const& path, int songID) {
     // Prefer the level last selected here, if it's one with this song.
     auto& r = remembered();
     levels::Entry const* found = nullptr;
-    for (auto const& e : m_entries) {
+    for (auto& e : m_entries) {
+        // Only levels with this song have their song file checked.
+        if (e.songID != songID) continue;
+        levels::resolve(e);
         if (e.songPath != path) continue;
         if (!found || (e.id == r.selectedId && e.official == r.selectedOfficial)) found = &e;
     }
@@ -897,8 +937,9 @@ void SongSelect::setTreeOpacity(CCNode* node, float factor) {
     if (auto rgba = dynamic_cast<CCRGBAProtocol*>(node)) {
         auto [it, fresh] = m_baseOpacity.try_emplace(node, rgba->getOpacity());
         rgba->setOpacity(static_cast<GLubyte>(it->second * std::clamp(factor, 0.f, 1.f)));
-        // Labels pass their opacity on to their letters themselves.
-        if (typeinfo_cast<CCLabelBMFont*>(node)) return;
+        // Labels pass their opacity on to their letters themselves, and so do
+        // nodes cascading it (carousel panels): their children follow.
+        if (typeinfo_cast<CCLabelBMFont*>(node) || rgba->isCascadeOpacityEnabled()) return;
     }
     for (auto child : CCArrayExt<CCNode*>(node->getChildren())) setTreeOpacity(child, factor);
 }
@@ -1112,6 +1153,28 @@ void SongSelect::openLevelPage() {
     CCDirector::get()->replaceScene(CCTransitionFade::create(0.5f, LevelInfoLayer::scene(e.level, false)));
 }
 
+void SongSelect::browseOnline(bool results) {
+    if (m_starting) return;
+    closeFolders();
+    // GD's own online screens take over; backing out of them (to GD's creator
+    // hub) comes back here. Levels played from there return to their level page.
+    returnsHere() = false;
+    browsingOnline() = true;
+    CCScene* scene = nullptr;
+    if (results && !m_query.empty()) {
+        scene = LevelBrowserLayer::scene(GJSearchObject::create(SearchType::Search, m_query));
+    } else {
+        scene = LevelSearchLayer::scene(0);
+        auto layer = scene ? scene->getChildByType<LevelSearchLayer>(0) : nullptr;
+        if (layer && layer->m_searchInput && !m_query.empty()) layer->m_searchInput->setString(m_query);
+    }
+    if (!scene) {
+        browsingOnline() = false;
+        return;
+    }
+    CCDirector::get()->replaceScene(CCTransitionFade::create(0.5f, scene));
+}
+
 void SongSelect::back() {
     sfx::play(sfx::sound::DEFAULT_SELECT);
     returnsHere() = false;
@@ -1122,7 +1185,10 @@ void SongSelect::back() {
     auto engine = FMODAudioEngine::sharedEngine();
     std::string playing = engine->getActiveMusic(0);
     if (!playing.empty() && engine->isMusicPlaying(0)) {
-        auto it = std::find_if(m_entries.begin(), m_entries.end(), [&](auto const& e) { return e.songPath == playing; });
+        // Whatever plays was previewed here, so its level has its song path.
+        auto it = std::find_if(m_entries.begin(), m_entries.end(), [&](auto const& e) {
+            return e.resolved && e.songPath == playing;
+        });
         if (it != m_entries.end()) {
             int songID = it->official ? MusicPlayer::officialSongID(it->level->m_audioTrack) : it->level->m_songID;
             MusicPlayer::Track track {songID, playing, it->songTitle, it->songArtist, {}};
@@ -1180,6 +1246,19 @@ void SongSelect::updateWedge(bool animate) {
             hint->setAnchorPoint({0, 0.5f});
             hint->setPosition({40 * k, H - 94 * k});
             m_wedge->addChild(hint);
+        }
+        if (!m_query.empty()) {
+            // osu!'s NoResultsPlaceholder: clear the search, or search online for it.
+            std::string query = m_query.size() > 24 ? m_query.substr(0, 22) + "..." : m_query;
+            float y = H - 104 * k;
+            addButton(m_wedgeButtons, m_wedge, icon::GLOBE, fmt::format("search online for \"{}\"", query), {40 * k, y},
+                      30 * k, theme::COLOUR3, [this] { this->browseOnline(true); }, 0);
+            addButton(m_wedgeButtons, m_wedge, icon::XMARK, "clear search", {40 * k, y - 40 * k}, 30 * k, TAB, [this] {
+                m_query.clear();
+                remembered().query.clear();
+                if (m_search) m_search->setString("");
+                applyFilter();
+            }, 0);
         }
         return;
     }
@@ -1690,11 +1769,15 @@ void SongSelect::loadLeaderboardFailed(char const*) {
 
 SongSelect::Panel& SongSelect::makePanel(size_t visibleIndex) {
     float k = m_k;
+    levels::resolve(m_entries[m_visible[visibleIndex]]); // coins for the info row
     auto const& e = m_entries[m_visible[visibleIndex]];
     float pw = m_rightW + 60 * k, ph = m_panelH;
     auto accent = levels::difficultyColor(e.difficulty);
 
-    auto root = CCNode::create();
+    // Fades in as a whole: its parts follow its opacity.
+    auto root = CCNodeRGBA::create();
+    root->setCascadeOpacityEnabled(true);
+    root->setOpacity(0);
     root->setContentSize({pw, ph});
     root->setAnchorPoint({0, 0.5f});
     m_carousel->addChild(root);
@@ -1756,6 +1839,7 @@ SongSelect::Panel& SongSelect::makePanel(size_t visibleIndex) {
 
     auto& panel = m_panels[visibleIndex];
     panel = Panel {m_visible[visibleIndex], root, bg, thumb};
+    panel.appear.to(1.f, PANEL_FADE, Easing::OutQuint);
     return panel;
 }
 
@@ -1779,10 +1863,25 @@ void SongSelect::updateCarousel(float dt) {
         auto mouse = geode::cocos::getMousePos();
         float colLeft = m_win.width - m_rightW;
 
+        // Missing panels, a few per frame, from the middle of the view outwards.
+        float middle = (m_scroll + halfH - m_panelH / 2) / step;
+        std::vector<int> missing;
+        for (int i = first; i <= last; i++) {
+            if (!m_panels.contains(i)) missing.push_back(i);
+        }
+        std::sort(missing.begin(), missing.end(), [middle](int a, int b) {
+            return std::abs(a - middle) < std::abs(b - middle);
+        });
+        for (size_t n = 0; n < missing.size() && n < static_cast<size_t>(PANEL_LOADS_PER_FRAME); n++) makePanel(missing[n]);
+
         for (int i = first; i <= last; i++) {
             auto it = m_panels.find(i);
-            Panel& p = it != m_panels.end() ? it->second : makePanel(i);
+            if (it == m_panels.end()) continue; // built in a later frame
+            Panel& p = it->second;
             p.seen = true;
+            p.appear.update(dt);
+            auto alpha = static_cast<GLubyte>(255 * std::clamp(p.appear.get(), 0.f, 1.f));
+            if (p.root->getOpacity() != alpha) p.root->setOpacity(alpha);
 
             float centerFromTop = itemTop(i) - m_scroll + m_panelH / 2;
             float y = m_carouselTop - centerFromTop;
@@ -1817,6 +1916,9 @@ void SongSelect::updateCarousel(float dt) {
                     thumb->setTexture(texture);
                     thumb->setVisible(true);
                     thumb->setUserObject("loaded"_spr, CCBool::create(true));
+                }, [thumb] {
+                    // Its panel left the view before its turn came: skip it.
+                    return thumb->getParent() != nullptr;
                 });
             }
             if (p.thumb->getUserObject("loaded"_spr) && p.thumbAlpha.target() < 1.f) p.thumbAlpha.to(1.f, 300, Easing::OutQuint);

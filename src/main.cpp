@@ -290,6 +290,11 @@ class $modify(LazerCreatorLayer, CreatorLayer) {
     static CCScene* scene() {
         auto mod = Mod::get();
         if (!mod->getSettingValue<bool>("enabled")) return CreatorLayer::scene();
+        // GD's online screens opened from song select go back there.
+        if (lazer::SongSelect::browsingOnline()) {
+            lazer::SongSelect::browsingOnline() = false;
+            return lazer::SongSelect::scene();
+        }
         if (g_returnState == ButtonSystem::State::Initial) g_returnState = ButtonSystem::State::TopLevel;
         log::debug("CreatorLayer::scene -> menu (return {})", static_cast<int>(g_returnState));
         return MenuLayer::scene(false);
@@ -325,6 +330,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         g_newLevelFlow = false;
         // Back at the menu: gameplay no longer returns to song select.
         lazer::SongSelect::returnsHere() = false;
+        lazer::SongSelect::browsingOnline() = false;
         if (!mod->getSettingValue<bool>("enabled")) return true;
 
         for (auto id : HIDDEN_NODES) {

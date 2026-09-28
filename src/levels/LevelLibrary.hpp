@@ -16,20 +16,28 @@ struct Entry {
     std::string creator;
     std::string songTitle;
     std::string songArtist;
-    std::string songPath;      // empty if the song isn't downloaded
+    int songID = 0;            // custom song ID, or MusicPlayer::officialSongID for GD's tracks
+    std::string songPath;      // empty if the song isn't downloaded (see resolve())
     int difficulty = 0;        // GJDifficultySprite frame (-1 auto, 0 N/A, 1-5, 6-10 demons)
     int stars = 0;
     int normalPercent = 0;
     int practicePercent = 0;
     int coins = 0;             // coins in the level
-    int coinsCollected = 0;
+    int coinsCollected = 0;    // see resolve()
     bool coinsVerified = false;
     int length = 0;            // 0 tiny .. 4 XL, 5 platformer
     bool platformer = false;   // rated in moons instead of stars
     int bestTime = 0;          // platformer best time, ms (0 = none)
     int folder = 0;            // GD's saved-level folder (0 = none)
     std::string search;        // lower-cased name, creator and song, for filtering
+    bool resolved = false;     // songPath and coinsCollected filled in
 };
+
+// all() only reads what filtering and sorting need, so song select opens fast
+// with thousands of saved levels. Whether the song is downloaded (a file check
+// per level) and which coins you have are filled in here, once a level is
+// actually shown or played. Cheap to call again.
+void resolve(Entry& entry);
 
 // GD 2.2 has two kinds of level: classic (stars) and platformer (moons).
 enum class Kind { Classic, Platformer };
