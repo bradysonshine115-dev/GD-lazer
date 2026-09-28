@@ -26,9 +26,12 @@ namespace {
     // Touch area around the bar: a 10px bar is too thin for a finger.
     constexpr float SCROLLBAR_HIT_WIDTH = 36;
     constexpr float SCROLLBAR_HELD_WIDTH = 1.6f; // x the width while held
-    // Sideways, the held bar follows the finger like stiff rubber: it gives
-    // quickly at first, then less and less, never more than this.
-    constexpr float SCROLLBAR_PULL_MAX = 28;
+    // Sideways, the held bar follows the finger almost freely (a little
+    // rubbery resistance), at most this far into the carousel.
+    constexpr float SCROLLBAR_PULL_FOLLOW = 0.9f;
+    constexpr float SCROLLBAR_PULL_MAX = 300;
+    // The label keeps clear of the finger holding the bar.
+    constexpr float SCROLLBAR_LABEL_GAP = 64;
     constexpr float PANEL_SPACING = 3;   // BeatmapCarousel.SPACING
     constexpr float ACTIVE_X = 25;       // Panel.active_x_offset
     constexpr float CORNER = 10;         // Panel.CORNER_RADIUS
@@ -1808,7 +1811,7 @@ void SongSelect::updateScrollbar(float dt) {
     }
     if (m_barLabel->isVisible()) {
         // Slides out from the bar as it fades in.
-        float gap = 14 * k + 10 * k * (1 - labelAlpha);
+        float gap = SCROLLBAR_LABEL_GAP * k * (0.6f + 0.4f * labelAlpha);
         float y = std::clamp(m_barY, m_carouselBottom + 22 * k, m_carouselTop - 22 * k);
         m_barLabel->setPosition({right - width - gap, y});
         m_barLabelBg->setOpacity(static_cast<GLubyte>(labelAlpha * 255));
@@ -1864,7 +1867,7 @@ void SongSelect::dragScrollbar(CCPoint touch) {
     float k = m_k;
     float dx = touch.x - (m_win.width - SCROLLBAR_MARGIN * k - SCROLLBAR_WIDTH * k / 2);
     float max = SCROLLBAR_PULL_MAX * k;
-    m_barPull.set(std::copysign(max * (1 - std::exp(-std::abs(dx) / (max * 2.5f))), dx));
+    m_barPull.set(std::clamp(dx * SCROLLBAR_PULL_FOLLOW, -max, 0.f));
 
     auto [minScroll, maxScroll] = scrollRange();
     float travel = viewHeight() - m_barLength;
