@@ -1,5 +1,6 @@
 // osu!'s menu cursor (MenuCursorContainer): the arrow from osu-resources in
-// place of the system cursor, drawn above every scene. It shrinks and glows
+// place of the system cursor, drawn above everything, even other mods' ImGui
+// menus (Eclipse): it's drawn last, right before the frame is shown. It shrinks and glows
 // pink while a button is held, turns to follow a drag, springs back on
 // release, and taps. It shows wherever GD would show the system cursor.
 // PC only: phones have no pointer.
@@ -9,7 +10,6 @@
 #ifdef GEODE_IS_WINDOWS
 
 #include <Geode/modify/CCEGLView.hpp>
-#include <Geode/ui/OverlayManager.hpp>
 
 #include "../../audio/Sfx.hpp"
 #include "Easing.hpp"
@@ -236,11 +236,35 @@ namespace {
         CCPoint m_velocity;
         float m_tilt = 0;
     };
+
+    // Not in the scene graph: visited by hand in swapBuffers. Kept for the
+    // whole game (no release at exit, after cocos is gone).
+    MenuCursor* g_cursor = nullptr;
 }
 
 } // namespace lazer
 
 class $modify(LazerCursorView, CCEGLView) {
+    // After every other mod's hook: ImGui menus draw in theirs, and the
+    // cursor goes over them.
+    static void onModify(auto& self) {
+        (void)self.setHookPriorityPre("cocos2d::CCEGLView::swapBuffers", Priority::LastPre);
+    }
+
+    void swapBuffers() {
+        if (lazer::g_cursor) {
+            // No ccGLInvalidateStateCache here: it also frees cocos's matrix
+            // stacks (projection included) and the game draws nothing after.
+            // ImGui's backend restores the GL state it touches.
+            kmGLMatrixMode(KM_GL_MODELVIEW);
+            kmGLPushMatrix();
+            kmGLLoadIdentity();
+            lazer::g_cursor->visit();
+            kmGLPopMatrix();
+        }
+        CCEGLView::swapBuffers();
+    }
+
     void showCursor(bool state) {
         lazer::g_gdShowsCursor = state;
         CCEGLView::showCursor(state && !lazer::g_enabled);
@@ -253,7 +277,8 @@ class $modify(LazerCursorView, CCEGLView) {
 $on_game(Loaded) {
     Loader::get()->queueInMainThread([] {
         if (auto cursor = lazer::MenuCursor::create()) {
-            geode::OverlayManager::get()->addChild(cursor, 1 << 30);
+            cursor->retain();
+            lazer::g_cursor = cursor;
         }
     });
 }
