@@ -55,6 +55,7 @@ int countUnhearted();
 int deleteUnhearted();
 
 cocos2d::ccColor3B difficultyColor(int difficulty);
+char const* difficultyName(int difficulty);
 char const* lengthName(int length);
 
 // Whether the level can go straight to gameplay (level data and song present);

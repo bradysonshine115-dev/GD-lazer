@@ -25,6 +25,10 @@ namespace {
     constexpr float SCROLLBAR_MARGIN = 3;
     // Touch area around the bar: a 10px bar is too thin for a finger.
     constexpr float SCROLLBAR_HIT_WIDTH = 36;
+    constexpr float SCROLLBAR_HELD_WIDTH = 1.6f; // x the width while held
+    // Sideways, the held bar follows the finger like stiff rubber: it gives
+    // quickly at first, then less and less, never more than this.
+    constexpr float SCROLLBAR_PULL_MAX = 28;
     constexpr float PANEL_SPACING = 3;   // BeatmapCarousel.SPACING
     constexpr float ACTIVE_X = 25;       // Panel.active_x_offset
     constexpr float CORNER = 10;         // Panel.CORNER_RADIUS
@@ -250,6 +254,17 @@ bool SongSelect::init(levels::Kind kind, bool fromMenu) {
     m_bar->setAnchorPoint({1, 0.5f});
     m_bar->setVisible(false);
     this->addChild(m_bar, 1);
+    // The label beside the held bar.
+    m_barLabel = CCNode::create();
+    m_barLabelBg = RoundedBox::create({10, 10}, 8 * k, {24, 23, 28, 235});
+    m_barLabelBg->setShadow(8 * k, {0, 0, 0, 90});
+    m_barLabelBg->setAnchorPoint({1, 0.5f});
+    m_barLabel->addChild(m_barLabelBg);
+    m_barLabelText = makeText("", Weight::SemiBold, 22 * k);
+    m_barLabelText->setAnchorPoint({1, 0.5f});
+    m_barLabel->addChild(m_barLabelText);
+    m_barLabel->setVisible(false);
+    this->addChild(m_barLabel, 6);
     m_wedge = CCNode::create();
     this->addChild(m_wedge, 2);
 
@@ -1768,8 +1783,37 @@ void SongSelect::updateScrollbar(float dt) {
     m_barLength = std::max(SCROLLBAR_WIDTH * 3 * k, viewH * viewH / (range + viewH));
     float t = std::clamp((m_scroll - minScroll) / range, 0.f, 1.f);
     m_barY = m_carouselTop - m_barLength / 2 - t * (viewH - m_barLength);
-    m_bar->setContentSize({SCROLLBAR_WIDTH * k, m_barLength});
-    m_bar->setPosition({m_win.width - SCROLLBAR_MARGIN * k, m_barY});
+    m_barWidth.update(dt);
+    m_barPull.update(dt);
+    float width = SCROLLBAR_WIDTH * k * m_barWidth.get();
+    float right = m_win.width - SCROLLBAR_MARGIN * k + m_barPull.get();
+    m_bar->setContentSize({width, m_barLength});
+    m_bar->setRadius(width / 2);
+    m_bar->setPosition({right, m_barY});
+
+    // Label: follows the bar while it's held.
+    m_barLabelAlpha.update(dt);
+    float labelAlpha = m_barLabelAlpha.get();
+    m_barLabel->setVisible(labelAlpha > 0.01f);
+    if (m_barDragging) {
+        auto text = scrollbarText();
+        if (text != m_barText) {
+            m_barText = text;
+            m_barLabelText->setString(text.c_str());
+            float padX = 14 * k;
+            float textW = m_barLabelText->getScaledContentSize().width;
+            m_barLabelBg->setContentSize({std::max(textW + padX * 2, 44 * k), 44 * k});
+            m_barLabelText->setPosition({-padX, 0});
+        }
+    }
+    if (m_barLabel->isVisible()) {
+        // Slides out from the bar as it fades in.
+        float gap = 14 * k + 10 * k * (1 - labelAlpha);
+        float y = std::clamp(m_barY, m_carouselBottom + 22 * k, m_carouselTop - 22 * k);
+        m_barLabel->setPosition({right - width - gap, y});
+        m_barLabelBg->setOpacity(static_cast<GLubyte>(labelAlpha * 255));
+        m_barLabelText->setOpacity(static_cast<GLubyte>(labelAlpha * 255));
+    }
 
     auto mouse = geode::cocos::getMousePos();
     auto local = m_bar->convertToNodeSpace(mouse);
@@ -1792,12 +1836,40 @@ bool SongSelect::scrollbarHit(CCPoint world) const {
         && world.y > m_carouselBottom && world.y < m_carouselTop;
 }
 
-// Moves the bar's centre to y - grab, and the list with it.
-void SongSelect::dragScrollbar(float y) {
+std::string SongSelect::scrollbarText() const {
+    if (m_visible.empty()) return "";
+    float step = m_panelH + m_spacing;
+    float middle = m_scroll + viewHeight() / 2 - m_panelH / 2;
+    auto index = static_cast<size_t>(std::clamp(std::round(middle / step), 0.f, float(m_visible.size() - 1)));
+    auto const& e = m_entries[m_visible[index]];
+    switch (m_sort) {
+        case levels::Sort::Title:
+            for (char c : e.name) {
+                auto u = static_cast<unsigned char>(c);
+                if (std::isalpha(u)) return std::string(1, static_cast<char>(std::toupper(u)));
+                if (std::isdigit(u)) return "#";
+            }
+            return "?";
+        case levels::Sort::Difficulty: return levels::difficultyName(e.difficulty);
+        case levels::Sort::Progress:
+            if (e.platformer) return e.normalPercent >= 100 ? "completed" : "not completed";
+            return fmt::format("{}%", e.normalPercent);
+        default: return fmt::format("{} / {}", index + 1, m_visible.size());
+    }
+}
+
+// Moves the bar's centre to the touch's y - grab, and the list with it; the
+// touch's x pulls the bar sideways.
+void SongSelect::dragScrollbar(CCPoint touch) {
+    float k = m_k;
+    float dx = touch.x - (m_win.width - SCROLLBAR_MARGIN * k - SCROLLBAR_WIDTH * k / 2);
+    float max = SCROLLBAR_PULL_MAX * k;
+    m_barPull.set(std::copysign(max * (1 - std::exp(-std::abs(dx) / (max * 2.5f))), dx));
+
     auto [minScroll, maxScroll] = scrollRange();
     float travel = viewHeight() - m_barLength;
     if (travel <= 0) return;
-    float centre = std::clamp(y - m_barGrab, m_carouselBottom + m_barLength / 2, m_carouselTop - m_barLength / 2);
+    float centre = std::clamp(touch.y - m_barGrab, m_carouselBottom + m_barLength / 2, m_carouselTop - m_barLength / 2);
     float t = (m_carouselTop - m_barLength / 2 - centre) / travel;
     m_scrollTarget = minScroll + t * (maxScroll - minScroll);
 }
@@ -1898,7 +1970,10 @@ bool SongSelect::ccTouchBegan(CCTouch* touch, CCEvent*) {
         m_barDragging = true;
         m_barGrab = std::abs(loc.y - m_barY) <= m_barLength / 2 ? loc.y - m_barY : 0.f;
         m_barHighlight.to(1.f, 100, Easing::None);
-        dragScrollbar(loc.y);
+        m_barWidth.to(SCROLLBAR_HELD_WIDTH, 400, Easing::OutElastic);
+        m_barLabelAlpha.to(1.f, 150, Easing::OutQuint);
+        m_barText.clear();
+        dragScrollbar(loc);
         return true;
     }
     m_pressed = buttonAt(loc);
@@ -1920,7 +1995,7 @@ bool SongSelect::ccTouchBegan(CCTouch* touch, CCEvent*) {
 void SongSelect::ccTouchMoved(CCTouch* touch, CCEvent*) {
     auto loc = touch->getLocation();
     if (m_barDragging) {
-        dragScrollbar(loc.y);
+        dragScrollbar(loc);
         return;
     }
     if (!m_touchDown) return;
@@ -1942,6 +2017,10 @@ void SongSelect::ccTouchEnded(CCTouch* touch, CCEvent*) {
         m_barDragging = false;
         m_touchDown = false;
         m_barHighlight.to(0.f, 100, Easing::None);
+        m_barWidth.to(1.f, 300, Easing::OutQuint);
+        // Let go: the rubber snaps back and wobbles.
+        m_barPull.to(0.f, 600, Easing::OutElastic);
+        m_barLabelAlpha.to(0.f, 300, Easing::OutQuint);
         return;
     }
     bool wasDragging = m_dragging;

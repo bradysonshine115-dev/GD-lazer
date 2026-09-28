@@ -176,6 +176,23 @@ ccColor3B difficultyColor(int difficulty) {
     }
 }
 
+char const* difficultyName(int difficulty) {
+    switch (difficulty) {
+        case -1: return "auto";
+        case 1: return "easy";
+        case 2: return "normal";
+        case 3: return "hard";
+        case 4: return "harder";
+        case 5: return "insane";
+        case 7: return "easy demon";
+        case 8: return "medium demon";
+        case 6: return "hard demon";
+        case 9: return "insane demon";
+        case 10: return "extreme demon";
+        default: return "unrated";
+    }
+}
+
 char const* lengthName(int length) {
     switch (length) {
         case 0: return "tiny";

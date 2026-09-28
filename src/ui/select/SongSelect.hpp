@@ -140,7 +140,10 @@ protected:
     std::pair<float, float> scrollRange() const;
     void updateScrollbar(float dt);
     bool scrollbarHit(cocos2d::CCPoint world) const;
-    void dragScrollbar(float y);
+    void dragScrollbar(cocos2d::CCPoint touch);
+    // What the scrollbar's label says for the level in the middle of the view:
+    // its initial, difficulty or progress, by the sort.
+    std::string scrollbarText() const;
     Panel& makePanel(size_t entry);
     void updateWedge(bool animate = true);
     // Rebuilds the details for the same level, keeping the scroll position.
@@ -183,6 +186,13 @@ protected:
     bool m_barDragging = false;
     float m_barGrab = 0;              // touch y minus bar centre when grabbed
     bool m_barHovered = false;
+    Tweened<float> m_barWidth {1.f};     // x the resting width: wider while held
+    Tweened<float> m_barPull {0.f};      // sideways rubber-band offset
+    cocos2d::CCNode* m_barLabel = nullptr;
+    RoundedBox* m_barLabelBg = nullptr;
+    cocos2d::CCLabelBMFont* m_barLabelText = nullptr;
+    std::string m_barText;
+    Tweened<float> m_barLabelAlpha {0.f};
     Tweened<float> m_barHover {0.f};     // Gray8 -> GrayF
     Tweened<float> m_barHighlight {0.f}; // -> Highlight1 while held
 
