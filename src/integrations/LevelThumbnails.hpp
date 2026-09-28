@@ -13,11 +13,19 @@ namespace lazer::thumbnails {
 //
 // `callback` runs on the main thread with the texture, or with nullptr when the
 // level has no thumbnail or it couldn't be loaded.
-void fetch(int levelID, std::function<void(cocos2d::CCTexture2D*)> callback);
+//
+// Only a few thumbnails download or decode at once, newest request first, so a
+// list scrolled past quickly doesn't queue up hundreds of them. `wanted` (optional)
+// is asked when a queued request's turn comes: if nobody waiting on that level
+// still wants it (its card scrolled away), it's dropped without calling back.
+// Decoded thumbnails are kept for the most recently used levels only.
+void fetch(int levelID, std::function<void(cocos2d::CCTexture2D*)> callback,
+           std::function<bool()> wanted = nullptr);
 
 // RobTop's levels (main levels 1-22, the Tower's 5001-5004): screenshots bundled
-// with the mod (from the Geometry Dash Wiki). Same callback rules as fetch().
-void fetchOfficial(int levelID, std::function<void(cocos2d::CCTexture2D*)> callback);
+// with the mod (from the Geometry Dash Wiki). Same rules as fetch().
+void fetchOfficial(int levelID, std::function<void(cocos2d::CCTexture2D*)> callback,
+                   std::function<bool()> wanted = nullptr);
 
 // Tries each level in order and returns the first thumbnail found (with its
 // level ID), or nullptr / 0 when none of them has one.

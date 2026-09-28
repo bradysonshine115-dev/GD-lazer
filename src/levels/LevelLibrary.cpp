@@ -39,28 +39,38 @@ namespace {
         return std::clamp(level->getAverageDifficulty(), 0, 5);
     }
 
+    // Title and artist only: the download check waits for resolve().
     void fillSong(Entry& e, GJGameLevel* level) {
         if (level->m_songID > 0) {
             auto songs = MusicDownloadManager::sharedState();
+            e.songID = level->m_songID;
             e.songTitle = fmt::format("Song {}", level->m_songID);
             if (auto info = songs->getSongInfoObject(level->m_songID)) {
                 if (!info->m_songName.empty()) e.songTitle = info->m_songName;
                 e.songArtist = info->m_artistName;
             }
-            if (songs->isSongDownloaded(level->m_songID)) e.songPath = songs->pathForSong(level->m_songID);
         } else {
             int track = level->m_audioTrack;
+            e.songID = -(track + 1); // MusicPlayer::officialSongID
             e.songTitle = LevelTools::getAudioTitle(track);
             e.songArtist = LevelTools::nameForArtist(LevelTools::artistForAudio(track));
+        }
+    }
+
+    void fillSongPath(Entry& e, GJGameLevel* level) {
+        e.songPath.clear();
+        if (level->m_songID > 0) {
+            auto songs = MusicDownloadManager::sharedState();
+            if (songs->isSongDownloaded(level->m_songID)) e.songPath = songs->pathForSong(level->m_songID);
+        } else {
             // Bare file name, like GD plays it: on Android the full path is
             // "assets/...", which FMOD can't open.
-            e.songPath = LevelTools::getAudioFileName(track);
+            e.songPath = LevelTools::getAudioFileName(level->m_audioTrack);
         }
     }
 
     void fillCoins(Entry& e, GJGameLevel* level) {
-        e.coins = level->m_coins;
-        e.coinsVerified = e.official || level->m_coinsVerified.value() > 0;
+        e.coinsCollected = 0;
         auto stats = GameStatsManager::sharedState();
         for (int i = 1; i <= e.coins; i++) {
             auto key = level->getCoinKey(i);
@@ -85,8 +95,9 @@ namespace {
         e.platformer = level->isPlatformer();
         if (e.platformer) e.bestTime = level->m_bestTime;
         if (!official) e.folder = level->m_levelFolder;
+        e.coins = level->m_coins;
+        e.coinsVerified = official || level->m_coinsVerified.value() > 0;
         fillSong(e, level);
-        fillCoins(e, level);
         e.search = lower(e.name + " " + e.creator + " " + e.songTitle + " " + e.songArtist);
         return e;
     }
@@ -115,6 +126,13 @@ std::vector<Entry> all(Kind kind) {
         }
     }
     return entries;
+}
+
+void resolve(Entry& entry) {
+    if (entry.resolved || !entry.level) return;
+    entry.resolved = true;
+    fillSongPath(entry, entry.level);
+    fillCoins(entry, entry.level);
 }
 
 bool favorited(Entry const& entry) {
