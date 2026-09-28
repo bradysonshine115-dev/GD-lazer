@@ -113,4 +113,10 @@ cocos2d::CCLabelBMFont* makeIcon(char const* glyph, float size);
 // size is the size of the whole block.
 cocos2d::CCNode* makeWrappedText(std::string const& text, float size, float maxWidth, cocos2d::ccColor3B color);
 
+// GD's own labels restyled in Outfit (popups): the distance-field font for a
+// weight, and the shader that draws it with a soft dark halo, standing in for
+// GD fonts' baked outline so text stays readable over bright art.
+char const* sdfFont(Weight weight);
+void useHaloShader(cocos2d::CCLabelBMFont* label);
+
 } // namespace lazer

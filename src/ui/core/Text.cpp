@@ -61,6 +61,65 @@ void main() {
         return p;
     }
 
+    // For labels we don't own (no draw() override to set the sharpness per
+    // label): the vertex shader works it out from the MVP matrix instead.
+    // u_pxScale = screen pixels per point * half the window width / content scale;
+    // the 12 is 2 * SDF_SPREAD.
+    constexpr auto HALO_PROGRAM_KEY = "lazer.sdf-text-halo";
+
+    constexpr auto HALO_VERT = R"(
+attribute vec4 a_position;
+attribute vec2 a_texCoord;
+attribute vec4 a_color;
+uniform float u_pxScale;
+varying vec4 v_fragmentColor;
+varying vec2 v_texCoord;
+varying float v_sharpness;
+void main() {
+    gl_Position = CC_MVPMatrix * a_position;
+    v_fragmentColor = a_color;
+    v_texCoord = a_texCoord;
+    float pxPerTexel = length(CC_MVPMatrix[0].xy) / gl_Position.w * u_pxScale;
+    v_sharpness = max(1.0, 12.0 * pxPerTexel);
+}
+)";
+
+    // Fill as in FRAG, plus a dark halo up to 3 screen pixels out (as far as
+    // the atlas's spread allows: small text gets about one), solid near the
+    // letter and fading outwards, under the fill.
+    constexpr auto HALO_FRAG = R"(
+#ifdef GL_ES
+precision mediump float;
+#endif
+varying vec4 v_fragmentColor;
+varying vec2 v_texCoord;
+varying float v_sharpness;
+uniform sampler2D CC_Texture0;
+void main() {
+    float d = texture2D(CC_Texture0, v_texCoord).a;
+    float fill = clamp((d - 0.5) * v_sharpness + 0.5, 0.0, 1.0);
+    float reach = min(0.48, 3.0 / v_sharpness);
+    float halo = smoothstep(0.5 - reach, 0.5 - reach * 0.4, d) * 0.85 * v_fragmentColor.a;
+    vec4 c = v_fragmentColor * fill;
+    gl_FragColor = c + vec4(0.0, 0.0, 0.0, halo) * (1.0 - c.a);
+}
+)";
+
+    CCGLProgram* haloProgram() {
+        auto cache = CCShaderCache::sharedShaderCache();
+        if (auto p = cache->programForKey(HALO_PROGRAM_KEY)) return p;
+        auto p = new CCGLProgram();
+        p->initWithVertexShaderByteArray(HALO_VERT, HALO_FRAG);
+        p->addAttribute(kCCAttributeNamePosition, kCCVertexAttrib_Position);
+        p->addAttribute(kCCAttributeNameColor, kCCVertexAttrib_Color);
+        p->addAttribute(kCCAttributeNameTexCoord, kCCVertexAttrib_TexCoords);
+        p->link();
+        p->updateUniforms();
+        cache->addProgram(p, HALO_PROGRAM_KEY);
+        p->release();
+        return p;
+    }
+
     // A bitmap-font label drawn from a distance-field atlas: crisp at any scale.
     class SdfLabel : public CCLabelBMFont {
     public:
@@ -112,6 +171,25 @@ CCLabelBMFont* makeText(std::string const& text, Weight weight, float size) {
         case Weight::Bold: return makeLabel(text, "outfit-bold-sdf.fnt"_spr, size);
     }
     return nullptr;
+}
+
+char const* sdfFont(Weight weight) {
+    switch (weight) {
+        case Weight::Regular: return "outfit-regular-sdf.fnt"_spr;
+        case Weight::SemiBold: return "outfit-semibold-sdf.fnt"_spr;
+        case Weight::Bold: return "outfit-bold-sdf.fnt"_spr;
+    }
+    return nullptr;
+}
+
+void useHaloShader(CCLabelBMFont* label) {
+    auto program = haloProgram();
+    label->setShaderProgram(program);
+    // Set on every use: the window (and so the pixels per point) can change.
+    program->use();
+    float pxScale = CCDirector::get()->getWinSize().width * CCEGLView::sharedOpenGLView()->getScaleX()
+        / (2.f * CC_CONTENT_SCALE_FACTOR());
+    program->setUniformLocationWith1f(glGetUniformLocation(program->getProgram(), "u_pxScale"), pxScale);
 }
 
 CCLabelBMFont* makeIcon(char const* glyph, float size) {

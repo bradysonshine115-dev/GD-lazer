@@ -9,6 +9,7 @@
 
 #include <Geode/Geode.hpp>
 #include <Geode/modify/FLAlertLayer.hpp>
+#include <Geode/modify/TextArea.hpp>
 
 #ifdef GEODE_IS_WINDOWS
 #include <Windows.h>
@@ -17,6 +18,34 @@
 #endif
 
 using namespace geode::prelude;
+
+// TextArea keeps no copy of its text: remember it, so a restyled one can be
+// rebuilt in another font.
+class $modify(LazerTextArea, TextArea) {
+    struct Fields {
+        std::string text;
+        bool known = false;
+    };
+
+    void setString(gd::string text) {
+        m_fields->text = text;
+        m_fields->known = true;
+        TextArea::setString(text);
+        // Restyled: the new lines are in our distance-field font too.
+        if (std::string_view(m_fontFile).ends_with("-sdf.fnt") && m_label) {
+            // GD aligns each line by its unscaled width (right for GD's fonts
+            // at scale 1): with our scale the lines drift off centre.
+            for (auto line : CCArrayExt<CCNode*>(m_label->getChildren())) {
+                line->setPositionX(line->getPositionX() * line->getScaleX());
+            }
+            std::function<void(CCNode*)> apply = [&](CCNode* node) {
+                if (auto label = typeinfo_cast<CCLabelBMFont*>(node)) lazer::useHaloShader(label);
+                else for (auto child : CCArrayExt<CCNode*>(node->getChildren())) apply(child);
+            };
+            apply(m_label);
+        }
+    }
+};
 
 namespace lazer {
 
@@ -53,16 +82,43 @@ namespace {
         return false;
     }
 
+    // The Outfit font standing in for one of GD's, or null to keep it.
+    char const* replacementFor(std::string_view fnt) {
+        if (endsWith(fnt, "bigFont.fnt")) return sdfFont(Weight::SemiBold);
+        if (endsWith(fnt, "goldFont.fnt")) return sdfFont(Weight::Bold);
+        if (endsWith(fnt, "chatFont.fnt")) return sdfFont(Weight::Regular);
+        return nullptr;
+    }
+
+    float commonHeight(char const* fnt) {
+        auto config = FNTConfigLoadFile(fnt);
+        return config ? config->m_nCommonHeight : 0;
+    }
+
+    // Multi-line text (alert bodies, level descriptions, chat) lays out its lines
+    // with its font's metrics, and colour tags colour single letters: swapping the
+    // line labels' font throws both off. GD rebuilds it in Outfit instead.
+    void restyleTextArea(TextArea* area) {
+        auto fields = static_cast<LazerTextArea*>(area)->m_fields.self();
+        if (!fields->known) return;
+        std::string old = area->m_fontFile;
+        auto replacement = replacementFor(old);
+        if (!replacement) return;
+        float oldHeight = commonHeight(old.c_str());
+        float newHeight = commonHeight(replacement);
+        if (oldHeight <= 0 || newHeight <= 0) return;
+        area->m_fontFile = replacement;
+        area->m_scale *= oldHeight / newHeight;
+        area->setString(fields->text);
+    }
+
     // Swap GD's bitmap fonts for Outfit, keeping the same line height.
     void restyleLabel(CCLabelBMFont* label) {
         auto file = label->getFntFile();
         if (!file) return;
-        std::string_view fnt = file;
-        char const* replacement = nullptr;
-        if (endsWith(fnt, "bigFont.fnt")) replacement = "outfit-semibold.fnt"_spr;
-        else if (endsWith(fnt, "goldFont.fnt")) replacement = "outfit-bold.fnt"_spr;
-        else if (endsWith(fnt, "chatFont.fnt")) replacement = "outfit-regular.fnt"_spr;
+        auto replacement = replacementFor(file);
         if (!replacement) return;
+        std::string_view fnt = file;
 
         auto oldConfig = label->getConfiguration();
         float oldHeight = oldConfig ? oldConfig->m_nCommonHeight : 0;
@@ -70,6 +126,7 @@ namespace {
         auto color = label->getColor();
 
         label->setFntFile(replacement);
+        useHaloShader(label);
         auto newConfig = label->getConfiguration();
         float newHeight = newConfig ? newConfig->m_nCommonHeight : 0;
         if (oldHeight > 0 && newHeight > 0) {
@@ -133,11 +190,19 @@ namespace {
         }
         if (panel) replaceWithBox(panel, theme::BACKGROUND4, 10.f, true);
 
+        // Text areas first: rebuilding one frees its old line labels.
         std::vector<CCNode*> nodes;
+        collect(root, nodes);
+        for (auto node : nodes) {
+            if (auto area = typeinfo_cast<TextArea*>(node); area && node->isVisible()) restyleTextArea(area);
+        }
+        nodes.clear();
         collect(root, nodes);
         for (auto node : nodes) {
             if (!node->isVisible() || node == panel) continue;
             bool inInput = hasAncestor(node, root, [](CCNode* n) { return typeinfo_cast<CCTextInputNode*>(n); });
+            // Done above (or left alone when its text isn't known).
+            if (hasAncestor(node, root, [](CCNode* n) { return typeinfo_cast<TextArea*>(n) || typeinfo_cast<MultilineBitmapFont*>(n); })) continue;
 
             if (auto button = typeinfo_cast<ButtonSprite*>(node)) {
                 restyleButton(button);
