@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.5.5
+
+- Song select has osu!'s scrollbar: drag it, or tap beside it to jump. Held, it widens, follows your finger and shows where you are in the list: the position, first letter, difficulty or progress, by the sort
+- Delete a saved level from song select with the bin next to the heart
+- A level whose song isn't downloaded asks first: download and play, play without music, or cancel, instead of downloading everything straight away
+- Song select's confirmations are osu!'s dialogs now. Hold the red button to confirm a deletion
+- Blocked songs page (Settings > Lazer UI > Music > Blocked songs): unblock songs one by one or all at once
+- GD's popups are easier to read: text keeps its colours and stays centred, a dark outline keeps it readable over bright images, and button text is no longer oversized
+- Fixed: the menu underneath GD's popups (daily, weekly, gauntlets...) still reacted to clicks
+- Fixed: a profile opened from level comments showed behind the level info
+- Fixed: the osu! cursor was drawn under Eclipse's menu (PC)
+
 ## v0.5.4
 
 - The osu! cursor tilts as it moves, more the faster you move it. "Cursor rotation" in Settings > Lazer UI > Cursor turns off both the tilt and the drag spin
