@@ -208,6 +208,62 @@ void creatorAction(void (CreatorLayer::*handler)(CCObject*)) {
     (layer.data()->*handler)(sender);
 }
 
+// Buttons other mods add to the creator hub (GDDP's demon progression,
+// BetterInfo's...): the hub is hidden, so they move to the toolbar. Found by
+// their path of child indices, which is the same in every fresh hub.
+struct CreatorModButton {
+    std::vector<unsigned> path;
+    std::string id;
+    CCNode* image = nullptr; // the button's own image, in the scanned hub
+};
+
+// GD's own hub buttons (Geode's node IDs); anything else in a hub menu is a mod's.
+constexpr std::array VANILLA_CREATOR_BUTTONS = {
+    "create-button", "saved-button", "scores-button", "quests-button", "daily-button",
+    "weekly-button", "event-button", "gauntlets-button", "featured-button", "lists-button",
+    "paths-button", "map-packs-button", "search-button", "map-button", "versus-button",
+    "exit-button", "back-button", "vault-button", "treasure-room-button", "secret-door-button", "leaderboards-button",
+};
+
+std::vector<CreatorModButton> scanCreatorModButtons(CreatorLayer* layer) {
+    std::vector<CreatorModButton> found;
+    std::vector<unsigned> path;
+    std::function<void(CCNode*, bool)> walk = [&](CCNode* node, bool inMenu) {
+        unsigned i = 0;
+        for (auto child : CCArrayExt<CCNode*>(node->getChildren())) {
+            path.push_back(i++);
+            if (auto item = typeinfo_cast<CCMenuItem*>(child); item && inMenu) {
+                std::string id = item->getID();
+                bool vanilla = std::find(VANILLA_CREATOR_BUTTONS.begin(), VANILLA_CREATOR_BUTTONS.end(), id) != VANILLA_CREATOR_BUTTONS.end();
+                if (!vanilla && item->isVisible()) {
+                    CCNode* image = nullptr;
+                    if (auto sprite = typeinfo_cast<CCMenuItemSprite*>(item)) image = sprite->getNormalImage();
+                    found.push_back({path, id, image});
+                }
+            } else if (child->isVisible()) {
+                walk(child, inMenu || typeinfo_cast<CCMenu*>(child));
+            }
+            path.pop_back();
+        }
+    };
+    walk(layer, false);
+    return found;
+}
+
+// Presses a mod's hub button in a fresh hidden hub (its handler may use the hub).
+void creatorModAction(std::vector<unsigned> const& path) {
+    static Ref<CreatorLayer> layer;
+    layer = CreatorLayer::create();
+    if (!layer) return;
+    CCNode* node = layer;
+    for (auto i : path) {
+        auto children = node->getChildren();
+        if (!children || i >= children->count()) return;
+        node = static_cast<CCNode*>(children->objectAtIndex(i));
+    }
+    if (auto item = typeinfo_cast<CCMenuItem*>(node)) item->activate();
+}
+
 void showScene(CCScene* scene) {
     CCDirector::get()->replaceScene(CCTransitionFade::create(0.5f, scene));
 }
@@ -509,6 +565,18 @@ class $modify(LazerMenuLayer, MenuLayer) {
         toolbar->addRight({lazer::makeIcon(icon::BOLT, 1), "event level", hub(&CreatorLayer::onEventLevel)});
         toolbar->addRight({lazer::makeIcon(icon::VAULT, 1), "vault", hub(&CreatorLayer::onSecretVault)});
         toolbar->addRight({lazer::makeIcon(icon::DUNGEON, 1), "treasure room", hub(&CreatorLayer::onTreasureRoom)});
+
+        // Other mods' creator hub buttons.
+        if (auto scanned = Ref(CreatorLayer::create())) {
+            for (auto& button : scanCreatorModButtons(scanned)) {
+                log::debug("Creator hub mod button: {}", button.id);
+                auto iconNode = button.image ? lazer::snapshotNode(button.image) : nullptr;
+                toolbar->addRight({iconNode, button.id.empty() ? "" : prettyId(button.id), [this, path = button.path] {
+                    g_returnState = m_fields->buttons ? m_fields->buttons->getState() : ButtonSystem::State::TopLevel;
+                    creatorModAction(path);
+                }});
+            }
+        }
 
         // Profile: the vanilla button lives in profile-menu (or main-menu on some setups).
         CCMenuItem* profile = nullptr;
