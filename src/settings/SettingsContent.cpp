@@ -9,6 +9,7 @@
 #include "../update/Updater.hpp"
 #include "Account.hpp"
 #include "GDOptions.hpp"
+#include "OptionDialogs.hpp"
 
 #include <Geode/ui/GeodeUI.hpp>
 #include <algorithm>
@@ -316,8 +317,12 @@ void buildSettings(SettingsOverlay* overlay, MenuLayer* menu, MenuBackground* ba
 #ifdef GEODE_IS_DESKTOP
     // GD's mobile builds have no video options (or keybindings) screen.
     overlay->addSubsection("Display");
-    overlay->addRow(ButtonRow::create("Resolution, fullscreen & texture quality", w, k, [] {
+    overlay->addRow(ButtonRow::create("Fullscreen, resolution, texture quality & FPS", w, k, [] {
+#ifdef GEODE_IS_WINDOWS
+        showGraphicsDialog();
+#else
         VideoOptionsLayer::create()->show();
+#endif
     }));
 #endif
     lastPageName.clear();
@@ -342,7 +347,13 @@ void buildSettings(SettingsOverlay* overlay, MenuLayer* menu, MenuBackground* ba
         lastPageName.clear();
         for (int page : others) addGDPage(page);
         overlay->addSubsection("Parental");
-        overlay->addRow(ButtonRow::create("Parental control", w, k, [gd] { gd->layer()->onParental(nullptr); }));
+        overlay->addRow(ButtonRow::create("Parental control", w, k, [gd] {
+#ifdef GEODE_IS_WINDOWS
+            showParentalDialog();
+#else
+            gd->layer()->onParental(nullptr);
+#endif
+        }));
     }
 
     overlay->finish();
