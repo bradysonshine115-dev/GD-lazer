@@ -130,6 +130,7 @@ protected:
     void toggleFolders();
     void closeFolders();
     void confirmDeleteUnhearted();
+    void confirmDeleteLevel();
     void loadLeaderboard();
     void buildDetails(float top, float bottom);
     // Mirrors the hidden song widget into the song card.

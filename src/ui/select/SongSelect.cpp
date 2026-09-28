@@ -467,6 +467,39 @@ void SongSelect::confirmDeleteUnhearted() {
     ));
 }
 
+// The selected saved level, after asking. The selection moves on to the next
+// level (the one before, at the end of the list).
+void SongSelect::confirmDeleteLevel() {
+    if (!m_hasSelection || m_selected >= m_visible.size()) return;
+    auto const& e = m_entries[m_visible[m_selected]];
+    if (e.official) return;
+    Ref<GJGameLevel> level = e.level;
+    Ref<SongSelect> self = this;
+    showStyled(createQuickPopup(
+        "Delete level",
+        fmt::format("Delete <cy>{}</c> by {}? This can't be undone.", e.name, e.creator),
+        "Cancel", "Delete",
+        [self, level](auto, bool yes) {
+            if (!yes) return;
+            auto& visible = self->m_visible;
+            auto& entries = self->m_entries;
+            auto it = std::find_if(visible.begin(), visible.end(), [&](size_t i) { return entries[i].level == level; });
+            if (it == visible.end()) return;
+            size_t at = it - visible.begin();
+            auto deleted = entries[*it];
+            if (visible.size() > 1) {
+                // applyFilter keeps the selected level: make that the neighbour.
+                self->m_selected = at + 1 < visible.size() ? at + 1 : at - 1;
+                self->m_hasSelection = true;
+            }
+            levels::deleteLevel(deleted);
+            entries = levels::all(self->m_kind);
+            self->applyFilter();
+        },
+        false
+    ));
+}
+
 // --- bottom: footer ---
 
 void SongSelect::buildFooter() {
@@ -1132,35 +1165,39 @@ void SongSelect::updateWedge(bool animate) {
 
     float x0 = 36 * k;
     float maxW = w - x0 - 40 * k;
-    float titleW = e.official ? maxW : maxW - 56 * k;
+    float titleW = e.official ? maxW : maxW - 112 * k;
     auto title = makeText(e.name, Weight::SemiBold, 36 * k);
     title->setAnchorPoint({0, 0.5f});
     title->setPosition({x0, H - 38 * k});
     fit(title, titleW);
     m_wedge->addChild(title, 1);
 
-    // Heart (GD's favourite): saved levels only, like the level page.
+    // Heart (GD's favourite) and delete: saved levels only, like the level page.
     if (!e.official) {
+        float iconH = 30 * k;
+        CCSize size {iconH * 1.4f, iconH};
+        // Icon only: a small square-ish pill, icon centred.
+        auto iconButton = [&](char const* glyph, float x, ccColor4B color, std::function<void()> action) {
+            auto& b = addButton(m_wedgeButtons, m_wedge, glyph, "", {x, H - 38 * k}, iconH, color, std::move(action), 0);
+            b.node->setContentSize(size);
+            b.bg->setContentSize(size);
+            for (auto child : CCArrayExt<CCNode*>(b.node->getChildren())) {
+                if (child == b.bg) continue;
+                child->setAnchorPoint({0.5f, 0.5f});
+                child->setPosition(size / 2);
+            }
+        };
+        float x = x0 + title->getScaledContentSize().width + 14 * k;
         size_t index = m_wedgeButtons.size();
-        float heartH = 30 * k;
-        auto& heart = addButton(m_wedgeButtons, m_wedge, icon::HEART, "", {x0 + title->getScaledContentSize().width + 14 * k, H - 38 * k}, heartH,
-                                levels::favorited(e) ? PINK : TAB, [this, index] {
+        iconButton(icon::HEART, x, levels::favorited(e) ? PINK : TAB, [this, index] {
             if (!m_hasSelection || index >= m_wedgeButtons.size()) return;
             auto const& entry = m_entries[m_visible[m_selected]];
             bool on = !levels::favorited(entry);
             levels::setFavorited(entry, on);
             m_wedgeButtons[index].color = on ? PINK : TAB;
             sfx::play(on ? sfx::sound::CHECK_ON : sfx::sound::CHECK_OFF);
-        }, 0);
-        // Icon only: a small square-ish pill, icon centred.
-        CCSize size {heartH * 1.4f, heartH};
-        heart.node->setContentSize(size);
-        heart.bg->setContentSize(size);
-        for (auto child : CCArrayExt<CCNode*>(heart.node->getChildren())) {
-            if (child == heart.bg) continue;
-            child->setAnchorPoint({0.5f, 0.5f});
-            child->setPosition(size / 2);
-        }
+        });
+        iconButton(icon::TRASH, x + size.width + 8 * k, TAB, [this] { this->confirmDeleteLevel(); });
     }
 
     auto song = infoRow({{icon::MUSIC, e.songArtist.empty() ? e.songTitle : e.songTitle + "  -  " + e.songArtist}},

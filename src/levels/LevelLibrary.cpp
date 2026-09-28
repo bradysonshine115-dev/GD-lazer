@@ -159,6 +159,13 @@ int deleteUnhearted() {
     return static_cast<int>(levels.size());
 }
 
+void deleteLevel(Entry const& entry) {
+    if (entry.official || !entry.level) return;
+    Ref<GJGameLevel> keep = entry.level; // deleteLevel releases GD's reference
+    GameLevelManager::sharedState()->deleteLevel(entry.level);
+    log::info("Deleted saved level {} ({})", entry.name, entry.id);
+}
+
 ccColor3B difficultyColor(int difficulty) {
     switch (difficulty) {
         case -1: return {255, 214, 76};  // auto

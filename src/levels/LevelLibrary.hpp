@@ -53,6 +53,8 @@ std::string folderName(int folder);
 // (of either kind). deleteUnhearted() returns how many it deleted.
 int countUnhearted();
 int deleteUnhearted();
+// Deletes one saved level (GD's level page delete). Not for official levels.
+void deleteLevel(Entry const& entry);
 
 cocos2d::ccColor3B difficultyColor(int difficulty);
 char const* difficultyName(int difficulty);
