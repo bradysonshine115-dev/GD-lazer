@@ -8,6 +8,7 @@
 #include <Geode/Geode.hpp>
 
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 
 using namespace geode::prelude;
@@ -83,10 +84,28 @@ bool Dialog::init(char const* icon, std::string const& header, std::string const
     float ringY = y - RING / 2 * k;
     m_ring->setPosition({0, ringY});
     column->addChild(m_ring);
-    m_icon = makeIcon(icon, ICON * k);
-    m_iconBaseScale = m_icon->getScale();
+    // The glyph's box isn't centred on what's drawn (the bin sits left): a
+    // holder at the ring's centre, the icon offset so its ink is centred.
+    m_icon = CCNode::create();
     m_icon->setPosition({0, ringY});
     column->addChild(m_icon);
+    auto glyph = makeIcon(icon, ICON * k);
+    m_iconBaseScale = 1;
+    float minX = FLT_MAX, minY = FLT_MAX, maxX = -FLT_MAX, maxY = -FLT_MAX;
+    for (auto letter : CCArrayExt<CCNode*>(glyph->getChildren())) {
+        auto box = letter->boundingBox();
+        minX = std::min(minX, box.getMinX());
+        minY = std::min(minY, box.getMinY());
+        maxX = std::max(maxX, box.getMaxX());
+        maxY = std::max(maxY, box.getMaxY());
+    }
+    auto size = glyph->getContentSize();
+    glyph->setAnchorPoint({0.5f, 0.5f});
+    if (minX <= maxX) {
+        CCPoint offset {size.width / 2 - (minX + maxX) / 2, size.height / 2 - (minY + maxY) / 2};
+        glyph->setPosition(offset * glyph->getScale());
+    }
+    m_icon->addChild(glyph);
     y -= (RING + 30) * k;
 
     float textW = m_width - 30 * k;
