@@ -136,6 +136,11 @@ protected:
     void updateSongCard();
 
     void updateCarousel(float dt);
+    // The carousel's scroll limits: the first and last panels centred.
+    std::pair<float, float> scrollRange() const;
+    void updateScrollbar(float dt);
+    bool scrollbarHit(cocos2d::CCPoint world) const;
+    void dragScrollbar(float y);
     Panel& makePanel(size_t entry);
     void updateWedge(bool animate = true);
     // Rebuilds the details for the same level, keeping the scroll position.
@@ -171,6 +176,15 @@ protected:
     bool m_touchDown = false, m_dragging = false;
     cocos2d::CCPoint m_touchStart, m_touchLast;
     float m_dragVelocity = 0;
+
+    // osu!'s OsuScrollbar on the carousel's right edge.
+    RoundedBox* m_bar = nullptr;
+    float m_barLength = 0, m_barY = 0; // bar length and centre (screen y)
+    bool m_barDragging = false;
+    float m_barGrab = 0;              // touch y minus bar centre when grabbed
+    bool m_barHovered = false;
+    Tweened<float> m_barHover {0.f};     // Gray8 -> GrayF
+    Tweened<float> m_barHighlight {0.f}; // -> Highlight1 while held
 
     cocos2d::CCNode* m_wedge = nullptr;     // title + details, rebuilt on selection
     Tweened<float> m_wedgeAlpha {0.f};

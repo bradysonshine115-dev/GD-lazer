@@ -21,6 +21,10 @@ namespace lazer {
 namespace {
     // osu! sizes (768 px tall screen), scaled by m_k.
     constexpr float PANEL_HEIGHT = 72;   // PanelBeatmapStandalone.HEIGHT
+    constexpr float SCROLLBAR_WIDTH = 10;  // OsuScrollContainer.SCROLL_BAR_WIDTH
+    constexpr float SCROLLBAR_MARGIN = 3;
+    // Touch area around the bar: a 10px bar is too thin for a finger.
+    constexpr float SCROLLBAR_HIT_WIDTH = 36;
     constexpr float PANEL_SPACING = 3;   // BeatmapCarousel.SPACING
     constexpr float ACTIVE_X = 25;       // Panel.active_x_offset
     constexpr float CORNER = 10;         // Panel.CORNER_RADIUS
@@ -242,6 +246,10 @@ bool SongSelect::init(levels::Kind kind, bool fromMenu) {
 
     m_carousel = CCNode::create();
     this->addChild(m_carousel, 1);
+    m_bar = RoundedBox::create({SCROLLBAR_WIDTH * k, SCROLLBAR_WIDTH * k}, SCROLLBAR_WIDTH / 2 * k, {136, 136, 136, 255});
+    m_bar->setAnchorPoint({1, 0.5f});
+    m_bar->setVisible(false);
+    this->addChild(m_bar, 1);
     m_wedge = CCNode::create();
     this->addChild(m_wedge, 2);
 
@@ -1673,11 +1681,10 @@ void SongSelect::updateCarousel(float dt) {
     float step = m_panelH + m_spacing;
 
     if (!m_visible.empty()) {
-        float minScroll = m_panelH / 2 - halfH;
-        float maxScroll = itemTop(m_visible.size() - 1) + m_panelH / 2 - halfH;
+        auto [minScroll, maxScroll] = scrollRange();
         if (!m_dragging) m_scrollTarget = std::clamp(m_scrollTarget, minScroll, maxScroll);
     }
-    if (m_dragging) m_scroll = m_scrollTarget;
+    if (m_dragging || m_barDragging) m_scroll = m_scrollTarget;
     else m_scroll = damp(m_scroll, m_scrollTarget, SCROLL_DECAY, ms);
 
     for (auto& [index, panel] : m_panels) panel.seen = false;
@@ -1742,6 +1749,59 @@ void SongSelect::updateCarousel(float dt) {
     }
 }
 
+std::pair<float, float> SongSelect::scrollRange() const {
+    float halfH = viewHeight() / 2;
+    float last = m_visible.empty() ? 0.f : itemTop(m_visible.size() - 1);
+    return {m_panelH / 2 - halfH, last + m_panelH / 2 - halfH};
+}
+
+// Length from the visible share of the list (at least three widths, like
+// osu!), position from the scroll. Grey, white on hover, highlight while held.
+void SongSelect::updateScrollbar(float dt) {
+    float k = m_k;
+    auto [minScroll, maxScroll] = scrollRange();
+    float range = maxScroll - minScroll;
+    float viewH = viewHeight();
+    m_bar->setVisible(range > 1.f);
+    if (range <= 1.f) return;
+
+    m_barLength = std::max(SCROLLBAR_WIDTH * 3 * k, viewH * viewH / (range + viewH));
+    float t = std::clamp((m_scroll - minScroll) / range, 0.f, 1.f);
+    m_barY = m_carouselTop - m_barLength / 2 - t * (viewH - m_barLength);
+    m_bar->setContentSize({SCROLLBAR_WIDTH * k, m_barLength});
+    m_bar->setPosition({m_win.width - SCROLLBAR_MARGIN * k, m_barY});
+
+    auto mouse = geode::cocos::getMousePos();
+    auto local = m_bar->convertToNodeSpace(mouse);
+    auto size = m_bar->getContentSize();
+    bool hovered = local.x >= 0 && local.y >= 0 && local.x <= size.width && local.y <= size.height;
+    if (hovered != m_barHovered) {
+        m_barHovered = hovered;
+        m_barHover.to(hovered ? 1.f : 0.f, 100, Easing::None);
+    }
+    m_barHover.update(dt);
+    m_barHighlight.update(dt);
+    auto grey = static_cast<GLubyte>(136 + (255 - 136) * m_barHover.get());
+    ccColor4B colour {grey, grey, grey, 255};
+    m_bar->setFillColor(theme::lerp(colour, theme::HIGHLIGHT1, m_barHighlight.get()));
+}
+
+bool SongSelect::scrollbarHit(CCPoint world) const {
+    if (!m_bar->isVisible()) return false;
+    return world.x > m_win.width - SCROLLBAR_HIT_WIDTH * m_k
+        && world.y > m_carouselBottom && world.y < m_carouselTop;
+}
+
+// Moves the bar's centre to y - grab, and the list with it.
+void SongSelect::dragScrollbar(float y) {
+    auto [minScroll, maxScroll] = scrollRange();
+    float travel = viewHeight() - m_barLength;
+    if (travel <= 0) return;
+    float centre = std::clamp(y - m_barGrab, m_carouselBottom + m_barLength / 2, m_carouselTop - m_barLength / 2);
+    float t = (m_carouselTop - m_barLength / 2 - centre) / travel;
+    m_scrollTarget = minScroll + t * (maxScroll - minScroll);
+}
+
 void SongSelect::update(float dt) {
     float ms = dt * 1000.f;
     m_enterMs += ms;
@@ -1760,6 +1820,7 @@ void SongSelect::update(float dt) {
         return;
     }
     updateCarousel(dt);
+    updateScrollbar(dt);
 
     m_wedgeAlpha.update(dt);
     m_wedge->setPositionX(-24 * m_k * (1.f - m_wedgeAlpha.get()));
@@ -1831,6 +1892,15 @@ bool SongSelect::ccTouchBegan(CCTouch* touch, CCEvent*) {
     m_touchDown = true;
     m_dragging = false;
     m_touchStart = m_touchLast = loc;
+    // The scrollbar: grab it where it was touched, or (touching the track
+    // beside it) jump there and hold it by the middle.
+    if (!m_folderMenu && scrollbarHit(loc)) {
+        m_barDragging = true;
+        m_barGrab = std::abs(loc.y - m_barY) <= m_barLength / 2 ? loc.y - m_barY : 0.f;
+        m_barHighlight.to(1.f, 100, Easing::None);
+        dragScrollbar(loc.y);
+        return true;
+    }
     m_pressed = buttonAt(loc);
     // A tap outside the open folder list closes it.
     if (m_folderMenu) {
@@ -1849,6 +1919,10 @@ bool SongSelect::ccTouchBegan(CCTouch* touch, CCEvent*) {
 
 void SongSelect::ccTouchMoved(CCTouch* touch, CCEvent*) {
     auto loc = touch->getLocation();
+    if (m_barDragging) {
+        dragScrollbar(loc.y);
+        return;
+    }
     if (!m_touchDown) return;
     // Dragging the details scrolls them, and cancels a press on their buttons.
     if (m_detailsDrag.moved(loc)) {
@@ -1864,6 +1938,12 @@ void SongSelect::ccTouchMoved(CCTouch* touch, CCEvent*) {
 
 void SongSelect::ccTouchEnded(CCTouch* touch, CCEvent*) {
     auto loc = touch->getLocation();
+    if (m_barDragging) {
+        m_barDragging = false;
+        m_touchDown = false;
+        m_barHighlight.to(0.f, 100, Easing::None);
+        return;
+    }
     bool wasDragging = m_dragging;
     bool wasDown = m_touchDown;
     m_touchDown = false;
