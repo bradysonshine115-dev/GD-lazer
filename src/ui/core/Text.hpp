@@ -61,6 +61,7 @@ namespace icon {
     constexpr auto USERS = "\xEF\x83\x80";          // f0c0
     constexpr auto LINK = "\xEF\x83\x81";           // f0c1
     constexpr auto COPY = "\xEF\x83\x85";           // f0c5
+    constexpr auto WAND_MAGIC = "\xEF\x83\x90";     // f0d0
     constexpr auto CARET_DOWN = "\xEF\x83\x97";     // f0d7
     constexpr auto ENVELOPE = "\xEF\x83\xA0";       // f0e0
     constexpr auto BOLT = "\xEF\x83\xA7";           // f0e7
@@ -80,6 +81,7 @@ namespace icon {
     constexpr auto MOON = "\xEF\x86\x86";           // f186
     constexpr auto CUBE = "\xEF\x86\xB2";           // f1b2
     constexpr auto CIRCLE_NOTCH = "\xEF\x87\x8E";   // f1ce
+    constexpr auto PAPER_PLANE = "\xEF\x87\x98";    // f1d8
     constexpr auto SLIDERS = "\xEF\x87\x9E";        // f1de
     constexpr auto BELL_SLASH = "\xEF\x87\xB6";     // f1f6
     constexpr auto TRASH = "\xEF\x87\xB8";          // f1f8

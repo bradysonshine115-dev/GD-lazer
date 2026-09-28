@@ -74,7 +74,7 @@ protected:
     };
 
     bool init(std::vector<ButtonDef> buttons);
-    MenuButton* makeButton(ButtonDef const& def);
+    MenuButton* makeButton(ButtonDef const& def, float width);
     void onLogoClicked();
     void layoutButtons();
     void updateButtons(State state);

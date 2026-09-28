@@ -44,7 +44,7 @@ It replaces GD's menus, not its gameplay. GD's own screens and handlers still ru
 - Button bar with **play**, **create** and **browse** submenus, replacing GD's confusing creator hub:
   - play: classic, platformer, daily, gauntlets, map packs
   - create: my levels, new level, my lists
-  - browse: search, featured, lists, hall of fame
+  - browse: search, featured, lists, hall of fame, magic, recent (and sent, for moderators)
 - Toolbar with every vanilla and mod menu button, plus leaderboards, quests, paths, weekly, event, vault and treasure room
 - Blurred, parallax background that crossfades to the playing level's thumbnail
 
@@ -58,6 +58,10 @@ It replaces GD's menus, not its gameplay. GD's own screens and handlers still ru
 - Classic and platformer levels are separate lists; platformers include the Tower's levels and show moons and best times
 - The selected level's details, a preview of its song, and its thumbnail as the background
 - Playing a level, or backing out of GD's level page, returns to song select
+
+**Online levels (browse)**
+- osu!-style listing pages over GD's own level browser: level cards with thumbnails, ratings and stats, loading the next page as you scroll
+- The search page has a search box, difficulty / demon / length / general / played / type filters and the quick searches as sort tabs; song select's "browse" opens it with the search text
 
 **Updates**
 - Not on the Geode index, so the mod updates itself: on start it checks the version on GitHub's main branch and offers to download and install the new release (turn off in Lazer settings > Updates)

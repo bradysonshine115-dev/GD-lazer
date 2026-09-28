@@ -48,8 +48,10 @@ namespace theme {
         cocos2d::ccColor4B light3() const { return get(0.4f, 0.7f); }
         cocos2d::ccColor4B light4() const { return get(0.4f, 0.5f); }
         cocos2d::ccColor4B light1() const { return get(0.4f, 0.8f); }
+        cocos2d::ccColor4B light2() const { return get(0.4f, 0.75f); }
         cocos2d::ccColor4B dark3() const { return get(0.2f, 0.25f); }
         cocos2d::ccColor4B dark4() const { return get(0.2f, 0.2f); }
+        cocos2d::ccColor4B dark6() const { return get(0.2f, 0.1f); }
         cocos2d::ccColor4B foreground1() const { return get(0.1f, 0.6f); }
         cocos2d::ccColor4B background1() const { return get(0.1f, 0.4f); }
         cocos2d::ccColor4B background2() const { return get(0.1f, 0.3f); }

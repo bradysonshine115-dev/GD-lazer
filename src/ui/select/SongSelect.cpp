@@ -8,6 +8,7 @@
 #include "../menu/MenuBackground.hpp"
 #include "../overlays/CommentsOverlay.hpp"
 #include "../overlays/Dialog.hpp"
+#include "../overlays/LevelListingOverlay.hpp"
 
 #include <Geode/modify/GameManager.hpp>
 #include <Geode/modify/LevelInfoLayer.hpp>
@@ -518,7 +519,7 @@ void SongSelect::buildFooter() {
     auto& random = addButton(m_buttons, this, icon::SHUFFLE, "random", {x, y}, h, TAB, [this] { this->selectRandom(); }, skewDegrees());
     x += random.node->getContentSize().width + 10 * k;
     // Online levels: GD's search, with what's typed here already in it.
-    auto& browse = addButton(m_buttons, this, icon::GLOBE, "browse", {x, y}, h, TAB, [this] { this->browseOnline(false); }, skewDegrees());
+    auto& browse = addButton(m_buttons, this, icon::GLOBE, "browse", {x, y}, h, TAB, [this] { this->browseOnline(); }, skewDegrees());
     x += browse.node->getContentSize().width + 10 * k;
     auto& page = addButton(m_buttons, this, icon::CIRCLE_INFO, "level page", {x, y}, h, TAB, [this] { this->openLevelPage(); }, skewDegrees());
     x += page.node->getContentSize().width + 10 * k;
@@ -1154,21 +1155,15 @@ void SongSelect::openLevelPage() {
     CCDirector::get()->replaceScene(CCTransitionFade::create(0.5f, LevelInfoLayer::scene(e.level, false)));
 }
 
-void SongSelect::browseOnline(bool results) {
+void SongSelect::browseOnline() {
     if (m_starting) return;
     closeFolders();
-    // GD's own online screens take over; backing out of them (to GD's creator
-    // hub) comes back here. Levels played from there return to their level page.
+    // Our search page (over GD's hidden browser) takes over, with the search
+    // text already searched; backing out of it comes back here. Levels played
+    // from there return to their level page.
     returnsHere() = false;
     browsingOnline() = true;
-    CCScene* scene = nullptr;
-    if (results && !m_query.empty()) {
-        scene = LevelBrowserLayer::scene(GJSearchObject::create(SearchType::Search, m_query));
-    } else {
-        scene = LevelSearchLayer::scene(0);
-        auto layer = scene ? scene->getChildByType<LevelSearchLayer>(0) : nullptr;
-        if (layer && layer->m_searchInput && !m_query.empty()) layer->m_searchInput->setString(m_query);
-    }
+    auto scene = LevelListingOverlay::searchScene(m_query);
     if (!scene) {
         browsingOnline() = false;
         return;
@@ -1253,7 +1248,7 @@ void SongSelect::updateWedge(bool animate) {
             std::string query = m_query.size() > 24 ? m_query.substr(0, 22) + "..." : m_query;
             float y = H - 104 * k;
             addButton(m_wedgeButtons, m_wedge, icon::GLOBE, fmt::format("search online for \"{}\"", query), {40 * k, y},
-                      30 * k, theme::COLOUR3, [this] { this->browseOnline(true); }, 0);
+                      30 * k, theme::COLOUR3, [this] { this->browseOnline(); }, 0);
             addButton(m_wedgeButtons, m_wedge, icon::XMARK, "clear search", {40 * k, y - 40 * k}, 30 * k, TAB, [this] {
                 m_query.clear();
                 remembered().query.clear();

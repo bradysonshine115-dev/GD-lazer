@@ -137,9 +137,8 @@ protected:
     // Fades a node tree, relative to each node's opacity when first faded.
     void setTreeOpacity(cocos2d::CCNode* node, float factor);
     void openLevelPage();
-    // GD's online search, with the search text: its search screen, or straight
-    // to the results (`results`, from the no-results placeholder).
-    void browseOnline(bool results);
+    // The online search page, with the search text already searched.
+    void browseOnline();
     void back();
     void toggleFolders();
     void closeFolders();
