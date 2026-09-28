@@ -101,6 +101,7 @@ namespace icon {
     constexpr auto USER_CLOCK = "\xEF\x93\xBD";     // f4fd
     constexpr auto USER_GEAR = "\xEF\x93\xBE";      // f4fe
     constexpr auto COINS = "\xEF\x94\x9E";          // f51e
+    constexpr auto STORE = "\xEF\x95\x8E";          // f54e
     constexpr auto SHIRT = "\xEF\x95\x93";          // f553
     constexpr auto AWARD = "\xEF\x95\x99";          // f559
     constexpr auto MEDAL = "\xEF\x96\xA2";          // f5a2

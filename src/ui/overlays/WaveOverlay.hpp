@@ -38,6 +38,11 @@ protected:
     // Area under the header, in body() space (origin bottom-left).
     cocos2d::CCNode* body() const { return m_body; }
     cocos2d::CCSize bodySize() const { return m_body->getContentSize(); }
+    // The header bar, in its own space (origin bottom-left), for extras beside
+    // the title (a page's balance, say); they rise with the content.
+    cocos2d::CCNode* header() const { return m_header; }
+    // Where the close button starts: extras in header() stay left of it.
+    float headerRight() const;
     // Rows placed in body() that should get hover / clicks.
     void addInteractive(SettingsRow* row) { m_interactive.push_back(row); }
     void removeInteractive(SettingsRow* row);
@@ -66,6 +71,7 @@ private:
     std::array<Tweened<float>, 4> m_waveY {};  // distance of each wave's top edge below the overlay's top
     cocos2d::CCNode* m_content = nullptr;
     cocos2d::CCNode* m_body = nullptr;
+    cocos2d::CCNode* m_header = nullptr;
     Tweened<float> m_contentY {0.f};           // 0 = in place, 1 = one full height below
 
     RoundedBox* m_closeButton = nullptr;
