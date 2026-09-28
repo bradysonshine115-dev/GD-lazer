@@ -20,14 +20,25 @@ namespace lazer {
 // tabs on top; the other pages (featured, hall of fame, magic, recent...) are
 // just the cards under their title.
 //
+// "Your levels" and "your lists" (GD's "my levels" and "my lists") are the
+// same page in the create button's orange: the levels and lists on this
+// device as cards, GD's folders as a filter row, a search box and a "new"
+// button; your levels can also show the ones you uploaded.
+//
 // It sits over GD's own LevelBrowserLayer, which stays hidden underneath and
 // does the work: it asks GameLevelManager for pages and gets the results as
 // its LevelManagerDelegate; the hooks at the end of the .cpp hand them here.
 class LevelListingOverlay : public WaveOverlay, public TextInputDelegate {
 public:
-    // Whether GD's browser for this search gets this page (its online lists;
-    // the local ones, "my levels" and so on, keep GD's own screen).
+    // Whether GD's browser for this search gets this page (its online lists,
+    // and your levels and lists; the other local ones, saved levels and so
+    // on, keep GD's own screen).
     static bool wants(GJSearchObject* search);
+    // The page's colours: osu!'s Blue for browsing, Orange for your own things.
+    static theme::Scheme schemeFor(GJSearchObject* search);
+    // Set when "your levels" or "your lists" goes back: the menu opens its
+    // create buttons again, whichever way the player came.
+    static bool& backToCreate();
     // GD's browser scene for one of the online lists, shown as its own titled
     // page even for the quick-search types (magic, recent...).
     static cocos2d::CCScene* pageScene(SearchType type);
@@ -53,10 +64,10 @@ public:
     void enterPressed(CCTextInputNode* node) override;
 
 protected:
-    enum class Mode { Search, Plain };
+    enum class Mode { Search, Plain, Mine };
     enum class State { Loading, Loaded, Failed };
-    // The filter rows of the search page (BeatmapSearchFilterRow).
-    enum class Row { Difficulty, Demon, Length, General, Played, Type, Count };
+    // The filter rows (BeatmapSearchFilterRow): the search page's, then your levels'.
+    enum class Row { Difficulty, Demon, Length, General, Played, Type, Folder, Source, Count };
 
     // A tappable thing: a card, a filter tab, a sort tab or a rounded button.
     struct Pill {
@@ -109,6 +120,18 @@ protected:
     void loadMore();
     void refresh();
     void openItem(cocos2d::CCObject* item);
+    // Your levels and lists: the ones on this device (not their uploads).
+    bool local() const { return m_mode == Mode::Mine && !m_online; }
+    // Fills the page with your levels or lists that match the folder and search.
+    void showLocal();
+    // Builds a few of the cards showLocal queued (thousands would stall a frame).
+    void buildPending();
+    // GD's "my online levels": what you uploaded.
+    GJSearchObject* onlineSearch();
+    // GD's own "new level" / "new list".
+    void createNew();
+    // GD's folders your levels (or lists) are in, for the folder row.
+    void readFolders();
 
     // Building: the top part once, cards as they arrive, the footer per state.
     float buildSearchControl(float y);
@@ -157,6 +180,15 @@ protected:
     uint32_t m_general = 0;                 // bits: see GENERAL in the .cpp
     int m_played = 0;                       // 0 any, 1 uncompleted, 2 completed
     bool m_lists = false;
+
+    // Your levels and lists.
+    geode::Ref<GJSearchObject> m_mineSearch; // what GD's browser was opened with
+    bool m_online = false;                  // your uploads instead of this device's levels
+    int m_folder = 0;                       // GD's folder shown (0: all)
+    std::vector<int> m_folders;             // the folder row's: 0, then the folders in use
+    std::vector<std::string> m_folderNames;
+    std::vector<geode::Ref<cocos2d::CCObject>> m_toBuild; // cards still to build
+    size_t m_toBuildNext = 0;
 
     ScrollArea* m_scroll = nullptr;
     ScrollDragger m_drag;

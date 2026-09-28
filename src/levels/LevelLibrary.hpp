@@ -54,6 +54,10 @@ enum class Sort { Default, Title, Difficulty, Progress };
 bool favorited(Entry const& entry);
 void setFavorited(Entry const& entry, bool favorited);
 
+// A level's song title: the custom song's ("Song 123" until GD knows its
+// name), or the name of GD's own track.
+std::string songTitle(GJGameLevel* level);
+
 // Name of a saved-levels folder ("folder 3" if GD has no name for it).
 std::string folderName(int folder);
 

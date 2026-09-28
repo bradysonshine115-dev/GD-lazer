@@ -63,6 +63,11 @@ It replaces GD's menus, not its gameplay. GD's own screens and handlers still ru
 - osu!-style listing pages over GD's own level browser: level cards with thumbnails, ratings and stats, loading the next page as you scroll
 - The search page has a search box, difficulty / demon / length / general / played / type filters and the quick searches as sort tabs; song select's "browse" opens it with the search text
 
+**Your levels and lists (create)**
+- My levels and my lists open as the same kind of page, in the create button's orange: cards with the song, length, object count and whether each is verified or uploaded, a search box and GD's folders as a filter
+- A "new level" / "new list" button, and your levels can switch to the ones you uploaded
+- Tapping one opens GD's level (or list) page; backing out comes back to the page, then to the create buttons
+
 **Updates**
 - Not on the Geode index, so the mod updates itself: on start it checks the version on GitHub's main branch and offers to download and install the new release (turn off in Lazer settings > Updates)
 

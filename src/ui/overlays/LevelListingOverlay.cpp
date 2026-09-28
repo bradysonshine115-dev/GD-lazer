@@ -18,6 +18,8 @@ namespace lazer {
 namespace {
     // osu!'s Blue overlay scheme: the beatmap listing's.
     constexpr theme::Scheme SCHEME {200};
+    // osu!'s Orange (hue 45): your levels and lists, in the create button's colour.
+    constexpr theme::Scheme CREATE_SCHEME {45};
 
     // osu! sizes (768 px tall screen), scaled by m_k.
     constexpr float HORIZONTAL_PADDING = 50.f;  // WaveOverlayContainer
@@ -54,6 +56,8 @@ namespace {
     constexpr float SPIN_SPEED = 300.f;         // spinner, degrees per second
     constexpr int LEVELS_PER_PAGE = 10;               // levels per GD page
     constexpr int QUERY_LIMIT = 20;             // GD's search box
+    constexpr size_t CARDS_PER_FRAME = 12;      // your levels: cards built per frame
+    constexpr int THUMB_GLYPH = 1;              // tag of a local card's placeholder icon
 
     constexpr ccColor4B CLEAR {0, 0, 0, 0};
     constexpr ccColor4B WHITE {255, 255, 255, 255};
@@ -65,12 +69,17 @@ namespace {
     constexpr ccColor4B PURPLE1 {0x88, 0x66, 0xee, 255};
     constexpr ccColor4B PINK1 {0xff, 0x66, 0xaa, 255};
     constexpr ccColor4B GRAY {0x99, 0x99, 0x99, 255};
+    // ForBeatmapSetOnlineStatus again, for your own levels: uploaded like
+    // Qualified, verified like Pending, not yet verified like WIP.
+    constexpr ccColor4B UPLOADED_COLOUR {0x66, 0xcc, 0xff, 255};
+    constexpr ccColor4B VERIFIED_COLOUR {0xff, 0xd9, 0x66, 255};
+    constexpr ccColor4B UNVERIFIED_COLOUR {0xff, 0x99, 0x66, 255};
 
     // The filter rows (GD's search screen's options, as osu!'s rows).
     struct RowDef {
-        char const* label;
-        std::vector<char const*> options;
-        bool multi;
+        std::string label;
+        std::vector<std::string> options;
+        bool multi = false;
     };
     RowDef const ROWS[] = {
         // In GameLevelManager::getDifficultyStr's order.
@@ -254,6 +263,20 @@ namespace {
         char const* text;
         ccColor4B color;
     };
+    // Your own level or list: whether it's on GD's servers yet.
+    Status localStatus(GJGameLevel* level, GJLevelList* list) {
+        if (list) return list->m_uploaded || list->m_listID > 0 ? Status {"uploaded", UPLOADED_COLOUR} : Status {"not uploaded", UNVERIFIED_COLOUR};
+        if (level->m_isUploaded || level->m_levelID.value() > 0) return {"uploaded", UPLOADED_COLOUR};
+        if (level->m_isVerified.value() != 0) return {"verified", VERIFIED_COLOUR};
+        return {"unverified", UNVERIFIED_COLOUR};
+    }
+
+    // A folder of your levels and lists ("folder 3" if you haven't named it).
+    std::string createdFolderName(int folder) {
+        std::string name = GameLevelManager::sharedState()->getFolderName(folder, true);
+        return name.empty() ? fmt::format("folder {}", folder) : name;
+    }
+
     Status levelStatus(GJGameLevel* level) {
         switch (level->m_isEpic) {
             case 3: return {"mythic", PINK1};
@@ -290,6 +313,8 @@ namespace {
             case SearchType::Trending: return {icon::BOLT, "trending", "what's popular right now"};
             case SearchType::Awarded: return {icon::MEDAL, "awarded", "the latest rated levels"};
             case SearchType::Search: return {icon::SEARCH, "search results", "levels matching your search"};
+            case SearchType::MyLevels: return {icon::FOLDER_OPEN, "your levels", "the levels you're making"};
+            case SearchType::MyLists: return {icon::LIST, "your lists", "the lists you've put together"};
             default: break;
         }
         // GD's own title for anything else.
@@ -322,9 +347,23 @@ bool LevelListingOverlay::wants(GJSearchObject* search) {
         case SearchType::Sent:
         case SearchType::StarAward:
             return true;
+        // Not as the list picker GD opens over a level's page ("add to list").
+        case SearchType::MyLevels:
+        case SearchType::MyLists:
+            return !search->m_searchIsOverlay;
         default:
             return false;
     }
+}
+
+theme::Scheme LevelListingOverlay::schemeFor(GJSearchObject* search) {
+    bool mine = search && (search->m_searchType == SearchType::MyLevels || search->m_searchType == SearchType::MyLists);
+    return mine ? CREATE_SCHEME : SCHEME;
+}
+
+bool& LevelListingOverlay::backToCreate() {
+    static bool back = false;
+    return back;
 }
 
 CCScene* LevelListingOverlay::pageScene(SearchType type) {
@@ -355,10 +394,11 @@ bool LevelListingOverlay::init(LevelBrowserLayer* owner, GJSearchObject* search)
     m_owner = owner;
     // The quick searches share the search page; a marked one is shown plain.
     bool searchPage = quickType(search->m_searchType) && !search->getUserObject("plain"_spr);
-    m_mode = searchPage ? Mode::Search : Mode::Plain;
-    m_lists = search->m_searchMode == 1;
+    bool mine = search->m_searchType == SearchType::MyLevels || search->m_searchType == SearchType::MyLists;
+    m_mode = mine ? Mode::Mine : searchPage ? Mode::Search : Mode::Plain;
+    m_lists = search->m_searchMode == 1 || search->m_searchType == SearchType::MyLists;
     auto text = pageText(owner, search, searchPage);
-    if (!WaveOverlay::init(0, SCHEME, text.icon, text.title, text.description)) return false;
+    if (!WaveOverlay::init(0, schemeFor(search), text.icon, text.title, text.description)) return false;
     m_alive = std::make_shared<char>(0);
     m_pad = HORIZONTAL_PADDING * m_k;
     m_rowPills.resize(static_cast<size_t>(Row::Count));
@@ -366,6 +406,13 @@ bool LevelListingOverlay::init(LevelBrowserLayer* owner, GJSearchObject* search)
     m_rowY.resize(m_rowPills.size());
     m_rowW.resize(m_rowPills.size());
     if (m_mode == Mode::Search) readSearch(search);
+    if (m_mode == Mode::Mine) {
+        // GD's browser may carry a folder and a search of its own: start from them.
+        m_mineSearch = search;
+        m_query = trim(std::string(search->m_searchQuery));
+        m_folder = std::max(0, search->m_folder);
+        readFolders();
+    }
 
     m_scroll = ScrollArea::create(bodySize());
     body()->addChild(m_scroll);
@@ -373,7 +420,7 @@ bool LevelListingOverlay::init(LevelBrowserLayer* owner, GJSearchObject* search)
     // The controls are built once; the cards and the footer under them change.
     float k = m_k;
     float y = 0;
-    if (m_mode == Mode::Search) y = buildSearchControl(y) + 10 * k; // BeatmapListingFilterControl's spacing
+    if (m_mode != Mode::Plain) y = buildSearchControl(y) + 10 * k; // BeatmapListingFilterControl's spacing
     y = buildStrip(y);
     m_cardsTop = y + CARDS_TOP * k;
 
@@ -388,6 +435,12 @@ bool LevelListingOverlay::init(LevelBrowserLayer* owner, GJSearchObject* search)
     m_footer = CCNode::create();
     m_scroll->content()->addChild(m_footer);
     rebuildSort();
+
+    // Your levels are read straight from GD's local levels, a few cards a frame.
+    if (m_mode == Mode::Mine) {
+        showLocal();
+        return true;
+    }
 
     // GD's browser asked for the first page while it was built: that request is ours now.
     m_current = search;
@@ -466,6 +519,11 @@ void LevelListingOverlay::request(GJSearchObject* search, bool fresh) {
 
 void LevelListingOverlay::startSearch() {
     m_searchDelay = -1;
+    if (m_mode == Mode::Mine) {
+        if (m_online) request(onlineSearch(), true);
+        else showLocal();
+        return;
+    }
     rebuildSort();
     request(makeSearch(0), true);
 }
@@ -481,8 +539,11 @@ void LevelListingOverlay::loadMore() {
 
 void LevelListingOverlay::refresh() {
     if (m_state == State::Loading) return;
+    // Something may have changed your levels since (another mod, a sync): read them again.
+    if (local()) return showLocal();
     GJSearchObject* search = nullptr;
     if (m_mode == Mode::Search) search = makeSearch(0);
+    else if (m_mode == Mode::Mine) search = onlineSearch();
     else if (m_current) search = m_current->getPageObject(0);
     if (!search) return;
     // GD keeps pages for a while; a refresh wants fresh ones.
@@ -492,24 +553,29 @@ void LevelListingOverlay::refresh() {
 
 void LevelListingOverlay::levelsLoaded(CCArray* items, char const* key) {
     // Only the page asked for: a stale one (the filters changed mid-load) is dropped.
-    if (!key || m_key != key) return;
+    // Your levels on this device don't come through GD's browser at all.
+    if (!key || m_key != key || local()) return;
     m_lastKey = m_key;
     m_key.clear();
 
     int count = items ? static_cast<int>(items->count()) : 0;
-    int added = 0;
+    int fresh = 0;
+    // Your uploads can't be searched on the server: the search box filters them here.
+    auto query = m_mode == Mode::Mine ? lower(m_query) : std::string();
     if (items) {
         for (auto item : CCArrayExt<CCObject*>(items)) {
             int id = itemID(item);
             if (id && m_seen.contains(id)) continue; // pages can overlap, like osu-web's
             if (id) m_seen.insert(id);
+            fresh++;
+            auto level = typeinfo_cast<GJGameLevel*>(item);
+            if (!query.empty() && level && lower(std::string(level->m_levelName)).find(query) == std::string::npos) continue;
             addCard(item);
-            added++;
         }
     }
     if (m_pendingTotal >= 0) m_total = m_pendingTotal;
     // Another page? GD says how far this one reached; failing that, a short page is the last.
-    if (count == 0 || added == 0) m_more = false;
+    if (count == 0 || fresh == 0) m_more = false;
     else if (m_pendingTotal >= 0 && m_pendingEnd >= 0) m_more = m_pendingEnd < m_pendingTotal;
     else m_more = count >= LEVELS_PER_PAGE;
     m_pendingTotal = m_pendingEnd = -1;
@@ -547,6 +613,19 @@ void LevelListingOverlay::pageInfo(std::string const& info, char const* key) {
 
 void LevelListingOverlay::openItem(CCObject* item) {
     if (m_leaving) return;
+    if (local()) {
+        // GD's "my levels" cells replace the screen with the level's own page
+        // (EditLevelLayer; a list's LevelListLayer), whose back button opens
+        // "my levels" again: this page.
+        CCScene* scene = nullptr;
+        if (auto level = typeinfo_cast<GJGameLevel*>(item)) scene = EditLevelLayer::scene(level);
+        else if (auto list = typeinfo_cast<GJLevelList*>(item)) scene = LevelListLayer::scene(list);
+        if (!scene) return;
+        m_leaving = true;
+        if (m_input) m_input->defocus();
+        CCDirector::get()->replaceScene(CCTransitionFade::create(0.5f, scene));
+        return;
+    }
     // GD's own cells push the page, so its back button returns to this list.
     CCScene* scene = nullptr;
     if (auto level = typeinfo_cast<GJGameLevel*>(item)) scene = LevelInfoLayer::scene(level, false);
@@ -561,8 +640,96 @@ void LevelListingOverlay::goBack() {
     m_leaving = true;
     if (m_input) m_input->defocus();
     sfx::play(sfx::sound::WAVE_POP_OUT);
+    if (m_mode == Mode::Mine) backToCreate() = true;
     // GD's creator hub, which the menu hook turns into wherever the player came from.
     CCDirector::get()->replaceScene(CCTransitionFade::create(0.5f, CreatorLayer::scene()));
+}
+
+// --- your levels and lists ---
+
+void LevelListingOverlay::readFolders() {
+    // Only the folders something is in (GD numbers them up to 999).
+    std::vector<int> used;
+    auto llm = LocalLevelManager::sharedState();
+    if (m_lists) {
+        if (llm->m_localLists) {
+            for (auto list : CCArrayExt<GJLevelList*>(llm->m_localLists)) if (list && list->m_folder > 0) used.push_back(list->m_folder);
+        }
+    } else if (llm->m_localLevels) {
+        for (auto level : CCArrayExt<GJGameLevel*>(llm->m_localLevels)) if (level && level->m_levelFolder > 0) used.push_back(level->m_levelFolder);
+    }
+    if (m_folder > 0) used.push_back(m_folder);
+    std::sort(used.begin(), used.end());
+    used.erase(std::unique(used.begin(), used.end()), used.end());
+
+    m_folders = {0};
+    m_folderNames = {"all"};
+    for (int folder : used) {
+        m_folders.push_back(folder);
+        m_folderNames.push_back(createdFolderName(folder));
+    }
+}
+
+void LevelListingOverlay::showLocal() {
+    clearCards();
+    m_scroll->scrollTo(0);
+    m_key.clear();
+    m_current = nullptr;
+    m_more = false;
+    m_state = State::Loaded;
+
+    // In GD's order (the one "my levels" shows), filtered like its search: by name.
+    auto query = lower(m_query);
+    auto matches = [&](std::string const& name, int folder) {
+        if (m_folder > 0 && folder != m_folder) return false;
+        return query.empty() || lower(name).find(query) != std::string::npos;
+    };
+    auto llm = LocalLevelManager::sharedState();
+    if (m_lists) {
+        if (llm->m_localLists) {
+            for (auto list : CCArrayExt<GJLevelList*>(llm->m_localLists)) {
+                if (list && matches(std::string(list->m_listName), list->m_folder)) m_toBuild.push_back(list);
+            }
+        }
+    } else if (llm->m_localLevels) {
+        for (auto level : CCArrayExt<GJGameLevel*>(llm->m_localLevels)) {
+            if (level && matches(std::string(level->m_levelName), level->m_levelFolder)) m_toBuild.push_back(level);
+        }
+    }
+    m_total = static_cast<int>(m_toBuild.size());
+    // Room for every card up front: a press on one survives the others being built.
+    m_cardPills.reserve(m_toBuild.size());
+    m_cards.reserve(m_toBuild.size());
+    buildPending();
+    rebuildFooter();
+}
+
+void LevelListingOverlay::buildPending() {
+    if (m_toBuildNext >= m_toBuild.size()) return;
+    size_t end = std::min(m_toBuild.size(), m_toBuildNext + CARDS_PER_FRAME);
+    for (; m_toBuildNext < end; m_toBuildNext++) addCard(m_toBuild[m_toBuildNext].data());
+    if (m_toBuildNext >= m_toBuild.size()) {
+        m_toBuild.clear();
+        m_toBuildNext = 0;
+    }
+    // The footer already made room for them all (rebuildFooter counts the pending ones).
+    layoutCards();
+}
+
+GJSearchObject* LevelListingOverlay::onlineSearch() {
+    // What GD's "my levels" shows for its online button: your levels by player ID.
+    int user = GameManager::get()->m_playerUserID.value();
+    return GJSearchObject::create(SearchType::UsersLevels, std::to_string(user));
+}
+
+void LevelListingOverlay::createNew() {
+    if (m_leaving || !m_owner) return;
+    m_leaving = true;
+    if (m_input) m_input->defocus();
+    // GD's own: a new level opens on its level page, a new list on its list
+    // page, and their back buttons come back here.
+    if (m_lists) m_owner->createNewList(nullptr);
+    else m_owner->createNewLevel(nullptr);
 }
 
 // --- building ---
@@ -622,14 +789,24 @@ float LevelListingOverlay::buildSearchControl(float y) {
     if (!m_query.empty()) m_input->setString(m_query);
     m_input->setDelegate(this);
     content->addChild(m_input, 2);
-    y += boxH + CONTROL_SPACING * k;
+    y += boxH;
 
+    // The search page's filter rows; your levels' folders (when you use any)
+    // and whether to show the ones on this device or your uploads.
+    std::vector<Row> rows;
+    if (m_mode == Mode::Mine) {
+        if (m_folders.size() > 1) rows.push_back(Row::Folder);
+        if (!m_lists && GameManager::get()->m_playerUserID.value() > 0) rows.push_back(Row::Source);
+    } else {
+        for (int r = 0; r <= static_cast<int>(Row::Type); r++) rows.push_back(static_cast<Row>(r));
+    }
     // The filter rows: a label column, then the tabs flowing to the right.
+    if (!rows.empty()) y += CONTROL_SPACING * k;
     float rowX = m_pad + ROWS_PADDING * k;
     float rowW = W - rowX - m_pad - ROWS_PADDING * k;
-    for (int r = 0; r < static_cast<int>(Row::Count); r++) {
-        if (r > 0) y += ROW_SPACING * k;
-        y = buildFilterRow(static_cast<Row>(r), y, rowX, rowW);
+    for (size_t i = 0; i < rows.size(); i++) {
+        if (i > 0) y += ROW_SPACING * k;
+        y = buildFilterRow(rows[i], y, rowX, rowW);
     }
     y += CONTROL_PADDING * k;
 
@@ -644,7 +821,10 @@ float LevelListingOverlay::buildSearchControl(float y) {
 float LevelListingOverlay::buildFilterRow(Row row, float y, float x, float width) {
     float k = m_k;
     auto content = m_scroll->content();
-    auto const& def = ROWS[static_cast<int>(row)];
+    RowDef def;
+    if (row == Row::Folder) def = RowDef {"Folder", m_folderNames, false};
+    else if (row == Row::Source) def = RowDef {"Show", {"local", "online"}, false};
+    else def = ROWS[static_cast<int>(row)];
     size_t r = static_cast<size_t>(row);
 
     auto label = makeText(def.label, Weight::Regular, 13 * k);
@@ -717,6 +897,21 @@ float LevelListingOverlay::buildStrip(float y) {
         m_sortHolder = CCNode::create();
         m_sortHolder->setPosition({STRIP_MARGIN * k + sortLabel->getScaledContentSize().width + 10 * k, cy});
         content->addChild(m_sortHolder, 1);
+    } else if (m_mode == Mode::Mine) {
+        // GD's "new" button, as a filled button at the left (osu!'s RoundedButton
+        // in the page's colour).
+        auto plusIcon = makeIcon(icon::PLUS, 10 * k);
+        auto newLabel = makeText(m_lists ? "new list" : "new level", Weight::SemiBold, 12 * k);
+        float iconW = plusIcon->getScaledContentSize().width;
+        float bh = HEADER_BUTTON * k + 4 * k;
+        float w = iconW + 5 * k + newLabel->getScaledContentSize().width + 24 * k;
+        auto& button = addPill(m_fixedPills, content, {w, bh}, bh / 2, {STRIP_MARGIN * k, cy}, {0, 0.5f}, m_scheme.colour3(),
+                               theme::lerp(m_scheme.colour3(), m_scheme.highlight1(), 0.5f), [this] { this->createNew(); });
+        plusIcon->setPosition({12 * k + iconW / 2, bh / 2});
+        button.node->addChild(plusIcon, 1);
+        newLabel->setAnchorPoint({0, 0.5f});
+        newLabel->setPosition({12 * k + iconW + 5 * k, bh / 2});
+        button.node->addChild(newLabel, 1);
     }
 
     // Refresh at the right (GD's lists have one), and how many there are.
@@ -783,6 +978,8 @@ void LevelListingOverlay::addCard(CCObject* item) {
     auto level = typeinfo_cast<GJGameLevel*>(item);
     auto list = level ? nullptr : typeinfo_cast<GJLevelList*>(item);
     if (!level && !list) return;
+    // Your own level or list on this device: what you'd want to know while making it.
+    bool local = this->local();
 
     // Fades in as a whole: its parts follow its opacity.
     auto root = CCNodeRGBA::create();
@@ -802,40 +999,67 @@ void LevelListingOverlay::addCard(CCObject* item) {
     thumb->setCornerRadii(r, 0, r, 0);
     thumb->setPosition({h / 2, h / 2});
     root->addChild(thumb, 1);
+    if (local) {
+        // Until a thumbnail comes (only uploaded levels can have one): what it is.
+        thumb->setCascadeOpacityEnabled(true);
+        auto glyph = makeIcon(level ? icon::PEN : icon::LIST, 22 * k);
+        glyph->setColor(theme::rgb(m_scheme.foreground1()));
+        glyph->setPosition({h / 2, h / 2});
+        glyph->setTag(THUMB_GLYPH);
+        thumb->addChild(glyph);
+    }
 
-    // Title, then who made it (osu!'s title, artist and "mapped by").
+    // Title, then who made it (osu!'s title, artist and "mapped by"); for your
+    // own, the song or how many levels the list has.
     float textX = h + 10 * k, textW = w - textX - 10 * k;
     std::string name = level ? std::string(level->m_levelName) : std::string(list->m_listName);
     std::string creator = level ? std::string(level->m_creatorName) : std::string(list->m_creatorName);
     if (creator.empty()) creator = "unknown";
+    if (name.empty()) name = "unnamed";
+    std::string subtitle = "by " + creator;
+    if (local) subtitle = level ? levels::songTitle(level) : fmt::format("{} levels", list->m_levels.size());
     auto title = makeText(name, Weight::SemiBold, 18 * k);
     title->setAnchorPoint({0, 0.5f});
     title->setPosition({textX, h - 15 * k});
     fit(title, textW);
     root->addChild(title, 2);
-    auto by = makeText("by " + creator, Weight::SemiBold, 14 * k);
+    auto by = makeText(subtitle, Weight::SemiBold, 14 * k);
     by->setAnchorPoint({0, 0.5f});
     by->setPosition({textX, h - 32 * k});
     fit(by, textW);
     root->addChild(by, 2);
 
-    // Statistics: downloads and likes (osu!'s plays and favourites), the length.
+    // Statistics: downloads and likes (osu!'s plays and favourites), the length;
+    // for your own, the length, objects and folder.
     auto iconColor = theme::rgb(m_scheme.content2());
     std::vector<std::pair<char const*, std::string>> stats;
-    stats.push_back({icon::CLOUD_DOWN, metric(level ? level->m_downloads : list->m_downloads)});
-    stats.push_back({icon::THUMBS_UP, metric(level ? level->m_likes : list->m_likes)});
-    if (level && !level->isPlatformer()) stats.push_back({icon::CLOCK, levels::lengthName(level->m_levelLength)});
-    if (list) {
-        stats.push_back({icon::LAYERS, fmt::format("{} levels", list->m_levels.size())});
-        if (list->m_diamonds > 0) stats.push_back({icon::GEM, metric(list->m_diamonds)});
+    if (local) {
+        if (level) {
+            if (level->isPlatformer()) stats.push_back({icon::RUNNING, "platformer"});
+            else stats.push_back({icon::CLOCK, levels::lengthName(level->m_levelLength)});
+            int objects = level->m_objectCount.value();
+            if (objects > 0) stats.push_back({icon::CUBE, withCommas(objects)});
+        }
+        int folder = level ? level->m_levelFolder : list->m_folder;
+        if (folder > 0 && m_folder == 0) stats.push_back({icon::FOLDER, createdFolderName(folder)});
+    } else {
+        stats.push_back({icon::CLOUD_DOWN, metric(level ? level->m_downloads : list->m_downloads)});
+        stats.push_back({icon::THUMBS_UP, metric(level ? level->m_likes : list->m_likes)});
+        if (level && !level->isPlatformer()) stats.push_back({icon::CLOCK, levels::lengthName(level->m_levelLength)});
+        if (list) {
+            stats.push_back({icon::LAYERS, fmt::format("{} levels", list->m_levels.size())});
+            if (list->m_diamonds > 0) stats.push_back({icon::GEM, metric(list->m_diamonds)});
+        }
     }
     auto statsNode = statsRow(stats, 11 * k, iconColor);
     statsNode->setPosition({textX, 30.5f * k});
     root->addChild(statsNode, 2);
 
     // BeatmapCardExtraInfoRow: the rating pill, then the difficulty (osu!'s spectrum).
+    // Your own levels: whether they're uploaded yet, and no difficulty (they have no rating).
     float ex = textX, ey = 14 * k;
-    Status status = level ? levelStatus(level) : list->m_featured ? Status {"featured", LIME1} : Status {nullptr, GRAY};
+    Status status = local ? localStatus(level, list)
+        : level ? levelStatus(level) : list->m_featured ? Status {"featured", LIME1} : Status {nullptr, GRAY};
     if (status.text) {
         auto statusLabel = makeText(status.text, Weight::Bold, 10 * k);
         statusLabel->setColor(theme::rgb(m_scheme.background6()));
@@ -849,14 +1073,16 @@ void LevelListingOverlay::addCard(CCObject* item) {
         pill->addChild(statusLabel);
         ex += pw + 6 * k;
     }
-    int frame = level ? difficultyFrame(level) : listFrame(list->m_difficulty);
-    auto state = level ? featureState(level) : list->m_featured ? GJFeatureState::Featured : GJFeatureState::None;
-    auto face = difficultyFace(frame, state, 18 * k);
-    face->setPosition({ex + 9 * k, ey});
-    root->addChild(face, 2);
-    ex += 18 * k + 5 * k;
+    if (!local || list) {
+        int frame = level ? difficultyFrame(level) : listFrame(list->m_difficulty);
+        auto state = level ? featureState(level) : list->m_featured ? GJFeatureState::Featured : GJFeatureState::None;
+        auto face = difficultyFace(frame, state, 18 * k);
+        face->setPosition({ex + 9 * k, ey});
+        root->addChild(face, 2);
+        ex += 18 * k + 5 * k;
+    }
     std::vector<std::pair<char const*, std::string>> reward;
-    if (level) {
+    if (level && !local) {
         if (level->m_stars.value() > 0) reward.push_back({level->isPlatformer() ? icon::MOON : icon::STAR, std::to_string(level->m_stars.value())});
         if (level->m_coins > 0) reward.push_back({icon::COINS, std::to_string(level->m_coins)});
     }
@@ -874,8 +1100,10 @@ void LevelListingOverlay::addCard(CCObject* item) {
     pill.hoverColor = m_scheme.background4();
     Ref<CCObject> ref = item;
     pill.action = [this, ref] { this->openItem(ref.data()); };
+    // A card pill moving (the list growing) would leave a press pointing nowhere.
+    bool moved = m_cardPills.size() == m_cardPills.capacity();
     m_cardPills.push_back(std::move(pill));
-    m_pressed = nullptr;
+    if (moved) m_pressed = nullptr;
 
     Card card;
     card.item = item;
@@ -902,6 +1130,8 @@ void LevelListingOverlay::clearCards() {
     m_cards.clear();
     m_cardPills.clear();
     m_seen.clear();
+    m_toBuild.clear();
+    m_toBuildNext = 0;
     m_pressed = nullptr;
 }
 
@@ -920,7 +1150,9 @@ void LevelListingOverlay::rebuildFooter() {
     }
 
     float spacing = CARD_SPACING * k;
-    int rows = m_cards.empty() ? 0 : static_cast<int>((m_cards.size() + m_columns - 1) / m_columns);
+    // Your levels still being built already take their room.
+    size_t cards = m_cards.size() + (m_toBuild.size() - m_toBuildNext);
+    int rows = cards == 0 ? 0 : static_cast<int>((cards + m_columns - 1) / m_columns);
     float y = m_cardsTop + (rows > 0 ? rows * (m_cardH + spacing) : 0);
     auto note = [&](std::string const& text, float size, ccColor3B color, float height) {
         auto label = makeText(text, Weight::Regular, size);
@@ -964,12 +1196,15 @@ void LevelListingOverlay::rebuildFooter() {
             break;
         }
         case State::Loaded: {
-            if (m_cards.empty()) {
-                // NotFoundDrawable.
+            if (cards == 0) {
+                // NotFoundDrawable; with nothing made yet, a nudge to the "new" button.
+                bool none = local() && m_query.empty() && m_folder == 0;
+                char const* text = "... nope, nothing found.";
+                if (none) text = m_lists ? "No lists yet. Start one with \"new list\"." : "No levels yet. Start one with \"new level\".";
                 float h = NOT_FOUND_HEIGHT * k;
-                auto glyph = makeIcon(icon::SEARCH, 40 * k);
+                auto glyph = makeIcon(none ? (m_lists ? icon::LIST : icon::PEN) : icon::SEARCH, 40 * k);
                 glyph->setColor(theme::rgb(m_scheme.background1()));
-                auto label = makeText("... nope, nothing found.", Weight::Regular, 16 * k);
+                auto label = makeText(text, Weight::Regular, 16 * k);
                 label->setColor(theme::rgb(m_scheme.content2()));
                 float gw = glyph->getScaledContentSize().width, lw = label->getScaledContentSize().width;
                 float x = (W - gw - 10 * k - lw) / 2;
@@ -980,7 +1215,7 @@ void LevelListingOverlay::rebuildFooter() {
                 m_footer->addChild(glyph);
                 m_footer->addChild(label);
                 y += h;
-            } else if (!m_more) {
+            } else if (!m_more && !local()) {
                 note("end of results", 12 * k, theme::rgb(m_scheme.foreground1()), 30 * k);
                 y += 30 * k;
             }
@@ -998,6 +1233,8 @@ void LevelListingOverlay::rebuildFooter() {
 bool LevelListingOverlay::rowUsable(Row row) const {
     // The demon kind only matters with demons chosen (GD's search screen does the same).
     if (row == Row::Demon) return (m_difficulty >> DIFF_DEMON) & 1;
+    // Your uploads aren't in your folders.
+    if (row == Row::Folder) return !m_online;
     return true;
 }
 
@@ -1009,6 +1246,8 @@ bool LevelListingOverlay::optionActive(Row row, int option) const {
         case Row::General: return (m_general >> option) & 1;
         case Row::Played: return m_played == option;
         case Row::Type: return (option == 1) == m_lists;
+        case Row::Folder: return option >= 0 && static_cast<size_t>(option) < m_folders.size() && m_folders[static_cast<size_t>(option)] == m_folder;
+        case Row::Source: return (option == 1) == m_online;
         default: return false;
     }
 }
@@ -1042,6 +1281,17 @@ void LevelListingOverlay::toggleOption(Row row, int option) {
         case Row::Type:
             if (m_lists == (option == 1)) return;
             m_lists = option == 1;
+            break;
+        case Row::Folder:
+            if (option < 0 || static_cast<size_t>(option) >= m_folders.size()) return;
+            if (m_folder == m_folders[static_cast<size_t>(option)]) return;
+            m_folder = m_folders[static_cast<size_t>(option)];
+            break;
+        case Row::Source:
+            if (m_online == (option == 1)) return;
+            m_online = option == 1;
+            // GD's browser goes back to "my levels" too, like its own online button's back.
+            if (!m_online && m_mineSearch) m_owner->loadPage(m_mineSearch);
             break;
         default:
             return;
@@ -1092,6 +1342,7 @@ void LevelListingOverlay::requestThumbnail(Card& card) {
         if (!texture || !thumb->getParent()) return;
         thumb->setTexture(texture);
         thumb->setFillColor(WHITE);
+        if (auto glyph = thumb->getChildByTag(THUMB_GLYPH)) glyph->setVisible(false);
     }, [alive, thumb, this, top, h] {
         // Its card scrolled away (or the page is gone) before its turn came: skip it.
         if (alive.expired() || !thumb->getParent()) return false;
@@ -1186,6 +1437,8 @@ void LevelListingOverlay::onUpdate(float dt) {
             m_dirty = true;
         }
     }
+    // Your levels, a few more cards each frame.
+    if (!m_toBuild.empty()) buildPending();
     if (m_dirty) rebuildFooter();
     for (auto spinner : m_spinners) spinner->setRotation(spinner->getRotation() + dt * SPIN_SPEED);
 
@@ -1269,8 +1522,9 @@ void LevelListingOverlay::textChanged(CCTextInputNode*) {
     auto query = trim(std::string(m_input->getString()));
     if (query == m_query) return;
     m_query = query;
-    // Typing waits a little before searching (BeatmapListingFilterControl's debounce).
-    queueSearch(QUERY_DEBOUNCE);
+    // Typing waits a little before searching (BeatmapListingFilterControl's
+    // debounce); your levels on this device filter almost right away.
+    queueSearch(local() ? FILTER_DEBOUNCE : QUERY_DEBOUNCE);
 }
 
 void LevelListingOverlay::enterPressed(CCTextInputNode*) {
@@ -1280,10 +1534,11 @@ void LevelListingOverlay::enterPressed(CCTextInputNode*) {
 
 } // namespace lazer
 
-// GD's LevelBrowserLayer shows every online list; for those it stays hidden
-// under our page and keeps doing the work: fetching pages as the browser's
-// LevelManagerDelegate, handing them to the page. Nothing is removed, so
-// other mods' hooks on it keep working.
+// GD's LevelBrowserLayer shows every online list, and your levels and lists;
+// for those it stays hidden under our page and keeps doing the work: fetching
+// pages as the browser's LevelManagerDelegate, handing them to the page, and
+// making new levels and lists. Nothing is removed, so other mods' hooks on it
+// keep working.
 class $modify(LazerLevelListing, LevelBrowserLayer) {
     struct Fields {
         lazer::LevelListingOverlay* page = nullptr;
@@ -1299,12 +1554,15 @@ class $modify(LazerLevelListing, LevelBrowserLayer) {
     bool init(GJSearchObject* search) {
         if (!LevelBrowserLayer::init(search)) return false;
         if (!lazer::LevelListingOverlay::wants(search)) return true;
+        // GD's pickers (a level's "add to list" shows your lists over it) and
+        // LevelListLayer (a browser too) keep GD's own screen.
+        if (m_isOverlay || typeinfo_cast<LevelListLayer*>(static_cast<LevelBrowserLayer*>(this))) return true;
         auto page = lazer::LevelListingOverlay::create(this, search);
         if (!page) return true;
         auto& f = m_fields;
 
         // A dark stage for the waves to rise over (FullscreenOverlay's Background6).
-        auto backdrop = CCLayerColor::create(lazer::theme::Scheme {200}.background6());
+        auto backdrop = CCLayerColor::create(lazer::LevelListingOverlay::schemeFor(search).background6());
         backdrop->setContentSize(CCDirector::get()->getWinSize());
         this->addChild(backdrop, 99);
         page->setID("level-listing"_spr);
@@ -1335,6 +1593,13 @@ class $modify(LazerLevelListing, LevelBrowserLayer) {
             m_list->m_listView->m_tableView->setTouchEnabled(false);
         }
         if (m_circle) m_circle->setTouchEnabled(false);
+    }
+
+    // Your levels on this device aren't a download: GD fills its (hidden)
+    // list straight away, without the delegate calls below.
+    void setupLevelBrowser(CCArray* items) {
+        LevelBrowserLayer::setupLevelBrowser(items);
+        if (m_fields->page) this->hideVanilla();
     }
 
     void loadLevelsFinished(CCArray* levels, char const* key, int type) {

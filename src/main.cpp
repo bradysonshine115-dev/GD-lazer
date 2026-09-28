@@ -291,6 +291,14 @@ class $modify(LazerCreatorLayer, CreatorLayer) {
     static CCScene* scene() {
         auto mod = Mod::get();
         if (!mod->getSettingValue<bool>("enabled")) return CreatorLayer::scene();
+        // Your levels and lists go back to the create buttons, even after the
+        // editor or a level page in between.
+        if (lazer::LevelListingOverlay::backToCreate()) {
+            lazer::LevelListingOverlay::backToCreate() = false;
+            lazer::SongSelect::browsingOnline() = false;
+            g_returnState = ButtonSystem::State::Create;
+            return MenuLayer::scene(false);
+        }
         // GD's online screens opened from song select go back there.
         if (lazer::SongSelect::browsingOnline()) {
             lazer::SongSelect::browsingOnline() = false;

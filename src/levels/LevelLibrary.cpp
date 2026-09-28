@@ -7,6 +7,15 @@ using namespace geode::prelude;
 
 namespace lazer::levels {
 
+std::string songTitle(GJGameLevel* level) {
+    if (level->m_songID > 0) {
+        auto info = MusicDownloadManager::sharedState()->getSongInfoObject(level->m_songID);
+        if (info && !info->m_songName.empty()) return info->m_songName;
+        return fmt::format("Song {}", level->m_songID);
+    }
+    return LevelTools::getAudioTitle(level->m_audioTrack);
+}
+
 namespace {
     // RobTop's main levels (Stereo Madness .. Dash).
     constexpr int FIRST_MAIN = 1;
@@ -41,18 +50,15 @@ namespace {
 
     // Title and artist only: the download check waits for resolve().
     void fillSong(Entry& e, GJGameLevel* level) {
+        e.songTitle = songTitle(level);
         if (level->m_songID > 0) {
-            auto songs = MusicDownloadManager::sharedState();
             e.songID = level->m_songID;
-            e.songTitle = fmt::format("Song {}", level->m_songID);
-            if (auto info = songs->getSongInfoObject(level->m_songID)) {
-                if (!info->m_songName.empty()) e.songTitle = info->m_songName;
+            if (auto info = MusicDownloadManager::sharedState()->getSongInfoObject(level->m_songID)) {
                 e.songArtist = info->m_artistName;
             }
         } else {
             int track = level->m_audioTrack;
             e.songID = -(track + 1); // MusicPlayer::officialSongID
-            e.songTitle = LevelTools::getAudioTitle(track);
             e.songArtist = LevelTools::nameForArtist(LevelTools::artistForAudio(track));
         }
     }
