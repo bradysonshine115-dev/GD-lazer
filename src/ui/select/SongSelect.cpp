@@ -55,6 +55,10 @@ namespace {
     constexpr float LOADER_DIM = 0.3f;       // the loader shows the background more (osu! un-dims it)
     constexpr float PUSH_DELAY = 1800;       // PlayerLoader.PlayerPushDelay
     constexpr float CONTENT_OUT = 300;       // PlayerLoader.CONTENT_OUT_DURATION
+    // When the level is built behind the loader. osu! starts loading the Player
+    // once the card has scaled in (650 ms); GD builds it in one go on this
+    // thread, so wait for the details too: the frame that stalls is a still one.
+    constexpr float LEVEL_LOAD_AT = 1000;
 
     constexpr ccColor4B PANEL_BG {36, 34, 44, 235};
     constexpr ccColor4B PANEL_HOVER {58, 54, 72, 245};
@@ -319,6 +323,8 @@ void SongSelect::onExit() {
     auto glm = GameLevelManager::sharedState();
     if (glm->m_leaderboardManagerDelegate == this) glm->m_leaderboardManagerDelegate = nullptr;
     stopListening();
+    // Leaving with a level built but not entered (the push hands it over first).
+    dropLevel();
     CCLayer::onExit();
 }
 
@@ -817,6 +823,9 @@ void SongSelect::play(bool withSong) {
     m_loaderAlpha.set(0);
     m_loaderAlpha.to(1, 500, Easing::OutQuint);
     m_metaAlpha.set(0);
+    m_spinnerAlpha.set(1);
+    m_spinnerScale.set(1);
+    dropLevel();
     m_dimTween.set(BACKGROUND_DIM);
     m_dimTween.to(LOADER_DIM, 800, Easing::OutQuint);
     if (needsDownloads(e)) startDownloads(e);
@@ -963,7 +972,13 @@ void SongSelect::cancelLoader() {
 void SongSelect::updateLoader(float dt) {
     float ms = dt * 1000.f;
     m_loaderMs += ms;
-    for (auto t : {&m_uiAlpha, &m_loaderAlpha, &m_loaderScale, &m_metaAlpha, &m_dimTween}) t->update(dt);
+    // The frame after the level was built is a long one. The wait counts it
+    // (the level loaded during it), but the animations carry on from where
+    // they stood instead of jumping to their ends.
+    float animDt = std::min(dt, 0.1f);
+    for (auto t : {&m_uiAlpha, &m_loaderAlpha, &m_loaderScale, &m_metaAlpha, &m_spinnerAlpha, &m_spinnerScale, &m_dimTween}) {
+        t->update(animDt);
+    }
 
     switch (m_loaderPhase) {
         case LoaderPhase::In:
@@ -977,24 +992,56 @@ void SongSelect::updateLoader(float dt) {
                     cancelLoader();
                     return;
                 }
-            } else if (m_loaderMs >= PUSH_DELAY) {
-                // ContentOut: the card shrinks and fades while the song fades.
+            } else if (m_levelLoad == LevelLoad::Waiting && m_loaderMs >= LEVEL_LOAD_AT) {
+                // Built next frame, so this one shows the status first.
+                m_levelLoad = LevelLoad::Queued;
+                if (m_loaderStatus) m_loaderStatus->setString("loading level");
+            } else if (m_levelLoad == LevelLoad::Queued) {
+                loadLevel();
+            } else if (m_levelLoad == LevelLoad::Loaded && m_loaderMs >= PUSH_DELAY) {
+                // pushWhenLoaded: loaded and the wait is over. ContentOut: the
+                // card shrinks and fades while the song fades.
                 m_loaderPhase = LoaderPhase::Out;
                 m_loaderMs = 0;
                 m_loaderScale.to(0.7f, CONTENT_OUT * 2, Easing::OutQuint);
                 m_loaderAlpha.to(0, CONTENT_OUT, Easing::OutQuint);
-                FMODAudioEngine::sharedEngine()->fadeOutMusic(CONTENT_OUT / 1000.f, 0);
+                bool preview = std::any_of(m_selectMusic.begin(), m_selectMusic.end(), [](Music const& m) { return m.id == 0; });
+                if (preview) FMODAudioEngine::sharedEngine()->fadeOutMusic(CONTENT_OUT / 1000.f, 0);
             }
             break;
         case LoaderPhase::Out:
             if (m_loaderMs >= CONTENT_OUT) {
                 m_loaderPhase = LoaderPhase::Pushed;
-                // Like GD's level page: nothing of the preview left playing; the
-                // level starts its own music once it begins.
                 m_previewDelay = -1;
-                FMODAudioEngine::sharedEngine()->stopAllMusic(true);
                 returnsHere() = true;
-                CCDirector::get()->replaceScene(CCTransitionFade::create(0.4f, PlayLayer::scene(m_loaderLevel, false, false)));
+                auto engine = FMODAudioEngine::sharedEngine();
+                if (!m_levelScene) {
+                    // Not built (PlayLayer::scene gave nothing back): as before,
+                    // build it now, with nothing of the preview left playing.
+                    engine->stopAllMusic(true);
+                    CCDirector::get()->replaceScene(CCTransitionFade::create(0.4f, PlayLayer::scene(m_loaderLevel, false, false)));
+                    break;
+                }
+                // Like GD's level page: nothing of the preview left playing; the
+                // level starts its own music once it begins. Only song select's
+                // own tracks stop: anything the level set up while it was built
+                // stays, which stopping all music would throw away.
+                auto playing = currentMusic();
+                for (auto const& m : m_selectMusic) {
+                    if (std::find(playing.begin(), playing.end(), m) != playing.end()) engine->stopAndRemoveMusic(m.id);
+                }
+                m_selectMusic.clear();
+                // GameManager learns about the level as it's entered, as when
+                // GD builds it right before its own transition.
+                auto gm = GameManager::get();
+                gm->m_playLayer = m_levelPlayLayer;
+                gm->m_gameLayer = m_levelGameLayer;
+                m_levelPlayLayer = nullptr;
+                m_levelGameLayer = nullptr;
+                auto transition = CCTransitionFade::create(0.4f, m_levelScene);
+                m_levelScene = nullptr;
+                m_levelLoad = LevelLoad::Waiting;
+                CCDirector::get()->replaceScene(transition);
             }
             break;
         case LoaderPhase::Cancelling:
@@ -1011,6 +1058,9 @@ void SongSelect::updateLoader(float dt) {
                 m_carousel->setPositionX(0);
                 m_background->setDim(BACKGROUND_DIM);
                 m_starting = false;
+                // Song select is back and still: a good moment to let go of
+                // the level, if it was built.
+                dropLevel();
                 return;
             }
             break;
@@ -1031,9 +1081,87 @@ void SongSelect::updateLoader(float dt) {
         float alpha = m_loaderAlpha.get();
         setTreeOpacity(m_loader, alpha);
         if (m_loaderMeta) setTreeOpacity(m_loaderMeta, alpha * m_metaAlpha.get());
-        if (m_spinner) m_spinner->setRotation(m_spinner->getRotation() + dt * 300.f);
+        if (m_spinner) {
+            m_spinner->setRotation(m_spinner->getRotation() + animDt * 300.f);
+            m_spinner->setScale(m_spinnerScale.get());
+            setTreeOpacity(m_spinner, alpha * m_spinnerAlpha.get());
+        }
     }
     m_background->setDim(m_dimTween.get());
+}
+
+// osu!'s PlayerLoader loads the Player in the background while its card shows
+// (prepareNewPlayer) and pushes it once it's loaded and the wait is over. GD
+// can only build a level on this thread, in one go: the frame this runs in
+// stalls, but it does so while the loader is up (osu! shows a spinner there
+// too), and the push afterwards is only the transition.
+void SongSelect::loadLevel() {
+    auto gm = GameManager::get();
+    auto playLayer = gm->m_playLayer;
+    auto gameLayer = gm->m_gameLayer;
+    auto before = currentMusic();
+
+    // Mods hooking PlayLayer::init run now too, not at the push.
+    m_levelScene = PlayLayer::scene(m_loaderLevel, false, false);
+    m_levelLoad = LevelLoad::Loaded;
+
+    // PlayLayer::init makes itself GameManager's current level (PlayLayer::get()).
+    // Nobody is playing it yet: song select is what's on screen until the push,
+    // so hold that back until then. GD pausing the level when the game loses
+    // focus, and mods asking whether a level is being played, find none; and
+    // after a cancel nothing is left pointing at a level that's gone. Its
+    // updates and actions don't run before it's entered (cocos pauses them for
+    // a node that isn't running), and it registers for touches and keys only
+    // when it's entered (onEnter).
+    m_levelPlayLayer = gm->m_playLayer;
+    m_levelGameLayer = gm->m_gameLayer;
+    gm->m_playLayer = playLayer;
+    gm->m_gameLayer = gameLayer;
+
+    // The preview plays on until the fade. Building the level may have set up
+    // its own music already: only what was playing before and is untouched is
+    // song select's to fade and stop.
+    auto after = currentMusic();
+    m_selectMusic.clear();
+    for (auto const& m : before) {
+        if (std::find(after.begin(), after.end(), m) != after.end()) m_selectMusic.push_back(m);
+    }
+
+    // Loaded: the spinner goes (LoadingSpinner.PopOut).
+    m_spinnerAlpha.to(0, 250, Easing::OutQuint);
+    m_spinnerScale.to(0.6f, 500, Easing::OutQuint);
+    if (m_loaderStatus) m_loaderStatus->setString("ready");
+}
+
+// Cancelled after the level was built: it was never entered, so there is no
+// onExit to undo what onEnter registers, and onQuit is for leaving a level that
+// was played (it saves progress and goes back to the menus). What the director
+// does to any scene it drops is cleanup() then release: cleanup stops the
+// actions and schedules the level (and mods) set up in init, which would keep
+// it alive, and the release destroys it (PlayLayer's destructor). GameManager
+// hasn't pointed at it since it was built (see loadLevel); make sure anyway.
+// The preview never stopped, so nothing of the music needs undoing.
+void SongSelect::dropLevel() {
+    m_levelLoad = LevelLoad::Waiting;
+    m_selectMusic.clear();
+    m_levelPlayLayer = nullptr;
+    m_levelGameLayer = nullptr;
+    if (!m_levelScene) return;
+    if (auto layer = m_levelScene->getChildByType<PlayLayer>(0)) {
+        auto gm = GameManager::get();
+        if (gm->m_playLayer == layer) gm->m_playLayer = nullptr;
+        if (gm->m_gameLayer == layer) gm->m_gameLayer = nullptr;
+    }
+    m_levelScene->cleanup();
+    m_levelScene = nullptr;
+}
+
+std::vector<SongSelect::Music> SongSelect::currentMusic() {
+    std::vector<Music> music;
+    for (auto const& entry : FMODAudioEngine::sharedEngine()->m_fmodMusic) {
+        music.push_back({entry.first, entry.second.m_channelID, static_cast<void*>(entry.second.m_sound)});
+    }
+    return music;
 }
 
 void SongSelect::startDownloads(levels::Entry const& e) {
@@ -1084,7 +1212,8 @@ void SongSelect::updateDownloads(float dt) {
             std::string song = percent > 0 ? fmt::format("song {}%", percent) : "song";
             status = status.empty() ? "downloading " + song : status + " and " + song;
         }
-        if (status.empty()) status = "ready";
+        // Everything's here: the level is built next.
+        if (status.empty()) status = "loading level";
         if (m_loaderStatus->getString() != status) m_loaderStatus->setString(status.c_str());
     }
     if (m_loaderFill) {
