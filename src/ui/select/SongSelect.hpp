@@ -146,6 +146,8 @@ protected:
     void confirmDeleteUnhearted();
     void confirmDeleteLevel();
     void loadLeaderboard();
+    // The selected saved level's comments, as the osu!-style page over song select.
+    void openComments();
     void buildDetails(float top, float bottom);
     // Mirrors the hidden song widget into the song card.
     void updateSongCard();
@@ -214,6 +216,7 @@ protected:
     cocos2d::CCNode* m_wedge = nullptr;     // title + details, rebuilt on selection
     Tweened<float> m_wedgeAlpha {0.f};
     geode::TextInput* m_search = nullptr;
+    bool m_searchEnabled = true;    // off while an overlay covers song select
     cocos2d::CCLabelBMFont* m_countLabel = nullptr;
     cocos2d::CCLabelBMFont* m_sortLabel = nullptr;
     std::vector<Button> m_tabs;
