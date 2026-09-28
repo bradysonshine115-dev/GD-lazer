@@ -150,13 +150,22 @@ void ProfileOverlay::present(ProfilePage* page) {
     }
     overlay->autorelease();
     // Under GD's own popups (FLAlertLayer uses z 105), over everything else.
-    // Popups already open (the level info a comment's name was tapped from)
-    // drop below it: they're behind the profile, and the ones it opens stay above.
+    // Popups and pages already open (GD's level info a comment's name was
+    // tapped from, the comments page under it) drop below it: they're behind
+    // the profile, and the ones it opens stay above. They keep their order
+    // among themselves, so GD's info opened from our comments page stays over
+    // that page once the profile closes.
+    std::vector<CCNode*> below;
     for (auto child : CCArrayExt<CCNode*>(scene->getChildren())) {
-        if (child->getZOrder() >= 100 && !child->getUserObject("hidden"_spr) && typeinfo_cast<FLAlertLayer*>(child)) {
-            scene->reorderChild(child, 99);
-        }
+        if (child->getZOrder() < 100 || child->getUserObject("hidden"_spr)) continue;
+        if (typeinfo_cast<FLAlertLayer*>(child) || typeinfo_cast<WaveOverlay*>(child)) below.push_back(child);
     }
+    std::stable_sort(below.begin(), below.end(), [](CCNode* a, CCNode* b) {
+        if (a->getZOrder() != b->getZOrder()) return a->getZOrder() < b->getZOrder();
+        return a->getOrderOfArrival() < b->getOrderOfArrival();
+    });
+    // reorderChild stamps a fresh arrival order: dropping them bottom first keeps theirs.
+    for (auto child : below) scene->reorderChild(child, 99);
     scene->addChild(overlay, 100);
     overlay->open();
 }

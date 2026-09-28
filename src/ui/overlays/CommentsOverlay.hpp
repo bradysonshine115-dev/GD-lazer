@@ -17,14 +17,25 @@ namespace lazer {
 // vote pill (plus a dislike pill, since GD has those), and a "show more"
 // button for the next page.
 //
+// Above them, what GD's InfoLayer shows besides the comments: the level's
+// description, ID and dates, and a button to GD's own page (its extra info
+// and other mods' buttons live there).
+//
 // GD's own GameLevelManager loads, posts and likes: this page is its
 // LevelCommentDelegate / CommentUploadDelegate while it's open. GD keeps raw
 // pointers to those, so they're cleared on exit and destruction.
+//
+// Every InfoLayer GD opens for a level is routed here (see the hook at the
+// end of the .cpp); profile comments and level lists keep GD's.
 class CommentsOverlay : public WaveOverlay, public cocos2d::CCKeypadDelegate,
                         public LevelCommentDelegate, public CommentUploadDelegate, public TextInputDelegate {
 public:
-    // Opens over the running scene, for a saved online level.
-    static void present(GJGameLevel* level);
+    // Opens over the running scene, for a saved online level. `gdLayer` is
+    // GD's InfoLayer this stands in for (created, not shown): it's kept
+    // hidden inside the page for as long as the page is open.
+    static bool present(GJGameLevel* level, InfoLayer* gdLayer = nullptr);
+    // Whether this GD InfoLayer is a level's comments, which this page shows.
+    static bool wants(InfoLayer* layer);
 
     ~CommentsOverlay() override;
     bool ccTouchBegan(cocos2d::CCTouch* touch, cocos2d::CCEvent* e) override;
@@ -82,6 +93,10 @@ protected:
     void askSignIn(char const* what);
     // Rebuilds the comments and the footer (the top part stays).
     void rebuild();
+    // The description, ID, dates and GD's page (what InfoLayer shows besides comments).
+    float buildInfo(float y);
+    // GD's own InfoLayer for this level, over the page.
+    void openGDPage();
     float buildCounter(float y);
     float buildEditor(float y);
     float buildSortHeader(float y);
@@ -124,6 +139,9 @@ protected:
     Pill* m_pressed = nullptr;
     std::vector<cocos2d::CCNode*> m_spinners;
 
+    cocos2d::CCLabelBMFont* m_idLabel = nullptr;
+    std::string m_idText;
+    float m_copiedMs = 0;              // "copied" shows instead of the ID for this long
     cocos2d::CCLabelBMFont* m_countLabel = nullptr;
     RoundedBox* m_countBg = nullptr;
     geode::TextInput* m_input = nullptr;

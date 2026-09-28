@@ -6,6 +6,7 @@
 #include "Dialog.hpp"
 
 #include <Geode/Geode.hpp>
+#include <Geode/modify/InfoLayer.hpp>
 #include <algorithm>
 #include <cctype>
 
@@ -34,6 +35,8 @@ namespace {
     constexpr float COMMENT_PADDING = 15.f;     // DrawableComment's vertical padding
     constexpr float VOTE_HEIGHT = 20.f;         // VotePill
     constexpr float PLACEHOLDER_HEIGHT = 80.f;  // NoCommentsPlaceholder
+    constexpr float INFO_PADDING = 15.f;        // around the description and its chips
+    constexpr float COPIED_MS = 1500.f;         // "copied" stays this long
     // GD's limit for a level comment (ShareCommentLayer's charLimit).
     constexpr int COMMENT_LIMIT = 100;
     // GD reports its own request failures; this catches one that never reports.
@@ -88,6 +91,13 @@ namespace {
         return player;
     }
 
+    // Nothing in a hidden GD layer may take touches: its list, menus and
+    // loading circle would otherwise still catch them (invisible) over ours.
+    void deafen(CCNode* node) {
+        if (auto layer = typeinfo_cast<CCLayer*>(node)) layer->setTouchEnabled(false);
+        for (auto child : CCArrayExt<CCNode*>(node->getChildren())) deafen(child);
+    }
+
     // osu!'s LoadingSpinner glyph. The glyph doesn't sit in the middle of its
     // label's line box: the holder turns around the glyph's own centre.
     CCNode* makeSpinner(float size, ccColor3B color) {
@@ -103,19 +113,42 @@ namespace {
     }
 }
 
-void CommentsOverlay::present(GJGameLevel* level) {
+bool CommentsOverlay::wants(InfoLayer* layer) {
+    if (!layer || !Mod::get()->getSettingValue<bool>("enabled")) return false;
+    // A player's comment history (m_score) and a list's comments keep GD's
+    // page; so does a level that isn't online (no comments to show).
+    return layer->m_level && !layer->m_score && !layer->m_levelList && layer->m_level->m_levelID.value() > 0;
+}
+
+bool CommentsOverlay::present(GJGameLevel* level, InfoLayer* gdLayer) {
     auto scene = CCDirector::get()->getRunningScene();
-    if (!scene || !level) return;
+    if (!scene || !level) return false;
     auto overlay = new CommentsOverlay();
     if (!overlay->init(level)) {
         delete overlay;
-        return;
+        return false;
     }
     overlay->autorelease();
+    if (gdLayer) {
+        // GD's page, kept (other mods may hold on to it or hook it) but never
+        // drawn or touched. It isn't shown, so it never registered for input.
+        gdLayer->setUserObject("hidden"_spr, CCBool::create(true));
+        deafen(gdLayer);
+        if (auto circle = gdLayer->m_loadingCircle) {
+            // It may sit in the scene rather than the layer; it never finishes here.
+            circle->setTouchEnabled(false);
+            circle->setVisible(false);
+        }
+        gdLayer->setKeypadEnabled(false);
+        gdLayer->setKeyboardEnabled(false);
+        gdLayer->setVisible(false);
+        overlay->addChild(gdLayer, -10);
+    }
     // Under GD's own popups (z 105) and our dialogs, over everything else,
     // like the profile page (which opens over this one from a name).
     scene->addChild(overlay, 100);
     overlay->open();
+    return true;
 }
 
 bool CommentsOverlay::init(GJGameLevel* level) {
@@ -137,7 +170,8 @@ bool CommentsOverlay::init(GJGameLevel* level) {
     body()->addChild(m_scroll);
 
     // The top part is built once; the comments under it are rebuilt as they load.
-    float y = buildCounter(0);
+    float y = buildInfo(0);
+    y = buildCounter(y);
     y = buildEditor(y);
     y = buildSortHeader(y);
     m_listTop = y;
@@ -357,6 +391,100 @@ CommentsOverlay::Pill& CommentsOverlay::addPill(std::vector<Pill>& list, CCNode*
     pill.action = std::move(action);
     list.push_back(std::move(pill));
     return list.back();
+}
+
+float CommentsOverlay::buildInfo(float y) {
+    float k = m_k, W = bodySize().width;
+    auto content = m_scroll->content();
+    y += INFO_PADDING * k;
+
+    // The description, as GD's InfoLayer shows it (with its words for none).
+    std::string desc = trim(std::string(m_level->getUnpackedLevelDescription()));
+    bool none = desc.empty();
+    if (none) desc = "(No description provided)";
+    auto text = makeWrappedText(desc, 14 * k, W - 2 * m_pad, theme::rgb(none ? m_scheme.foreground1() : m_scheme.content2()));
+    text->setPosition({m_pad, -y});
+    content->addChild(text, 1);
+    y += text->getContentSize().height + 10 * k;
+
+    // Chips under it, flowing onto another line on narrow screens: the ID
+    // (tap to copy, like GD's copy button), when it was uploaded and updated,
+    // what it's a copy of, and GD's own page.
+    float h = TAB_HEIGHT * k, gap = 5 * k, x = m_pad, top = y;
+    auto place = [&](float w) {
+        if (x > m_pad && x + w > W - m_pad) {
+            x = m_pad;
+            top += h + gap;
+        }
+        CCPoint at {x, -(top + h / 2)};
+        x += w + gap;
+        return at;
+    };
+    auto muted = theme::rgb(m_scheme.foreground1());
+    // A bare icon and label (nothing to tap).
+    auto chip = [&](char const* glyph, std::string const& label) {
+        auto icon = makeIcon(glyph, 10 * k);
+        icon->setColor(muted);
+        auto name = makeText(label, Weight::SemiBold, 12 * k);
+        name->setColor(muted);
+        float iconW = icon->getScaledContentSize().width;
+        float w = iconW + 5 * k + name->getScaledContentSize().width + 10 * k;
+        auto at = place(w);
+        icon->setPosition({at.x + 5 * k + iconW / 2, at.y});
+        content->addChild(icon, 1);
+        name->setAnchorPoint({0, 0.5f});
+        name->setPosition({at.x + 5 * k + iconW + 5 * k, at.y});
+        content->addChild(name, 1);
+    };
+    // A header-style button (the sort header's refresh): background on hover.
+    auto button = [&](char const* glyph, std::string const& label, float minLabelW, std::function<void()> action) {
+        auto icon = makeIcon(glyph, 10 * k);
+        auto name = makeText(label, Weight::SemiBold, 12 * k);
+        float iconW = icon->getScaledContentSize().width;
+        float labelW = std::max(minLabelW, name->getScaledContentSize().width);
+        float w = iconW + 5 * k + labelW + 20 * k;
+        auto& pill = addPill(m_fixedPills, content, {w, h}, 3 * k, place(w), {0, 0.5f}, CLEAR,
+                             m_scheme.background3(), std::move(action));
+        icon->setPosition({10 * k + iconW / 2, h / 2});
+        pill.node->addChild(icon, 1);
+        name->setAnchorPoint({0, 0.5f});
+        name->setPosition({10 * k + iconW + 5 * k, h / 2});
+        pill.node->addChild(name, 1);
+        return name;
+    };
+
+    int id = m_levelID;
+    m_idText = fmt::format("ID {}", id);
+    float copiedW = makeText("copied", Weight::SemiBold, 12 * k)->getScaledContentSize().width;
+    m_idLabel = button(icon::COPY, m_idText, copiedW, [this, id] {
+        utils::clipboard::write(std::to_string(id));
+        m_copiedMs = COPIED_MS;
+        m_idLabel->setString("copied");
+    });
+    std::string uploaded = m_level->m_uploadDate;
+    std::string updated = m_level->m_updateDate;
+    if (!uploaded.empty()) chip(icon::CLOUD_UP, fmt::format("uploaded {} ago", uploaded));
+    if (!updated.empty() && updated != uploaded) chip(icon::ROTATE, fmt::format("updated {} ago", updated));
+    int original = m_level->m_originalLevel.value();
+    if (original > 0 && original != id) chip(icon::LINK, fmt::format("copy of {}", original));
+    button(icon::CIRCLE_INFO, "more info", 0, [this] { this->openGDPage(); });
+
+    y = top + h + INFO_PADDING * k;
+    // A thin line between the level's part and the comments.
+    auto line = CCLayerColor::create(SEPARATOR);
+    line->setContentSize({W, 1.5f * k});
+    line->setPosition({0, -y});
+    content->addChild(line);
+    return y;
+}
+
+void CommentsOverlay::openGDPage() {
+    // GD's own page for the level: its level info, "original" and other
+    // mods' buttons. Marked so the hook below lets GD show it.
+    auto layer = InfoLayer::create(m_level, nullptr, nullptr);
+    if (!layer) return;
+    layer->setUserObject("vanilla"_spr, CCBool::create(true));
+    layer->show();
 }
 
 float CommentsOverlay::buildCounter(float y) {
@@ -789,6 +917,10 @@ void CommentsOverlay::updateEditor() {
 
 void CommentsOverlay::onUpdate(float dt) {
     float ms = dt * 1000.f;
+    if (m_copiedMs > 0) {
+        m_copiedMs -= ms;
+        if (m_copiedMs <= 0 && m_idLabel) m_idLabel->setString(m_idText.c_str());
+    }
     if (m_state == State::Loading) {
         m_loadingMs += ms;
         if (m_loadingMs > LOAD_TIMEOUT_MS) {
@@ -885,3 +1017,15 @@ void CommentsOverlay::enterPressed(CCTextInputNode*) {
 }
 
 } // namespace lazer
+
+// GD's comments page for a level (InfoLayer: the level page's info button,
+// and anything else that opens one) shows as our page instead. GD's layer is
+// already built by then: the page keeps it, hidden, and falls back to it if
+// it can't open.
+class $modify(LazerInfoLayer, InfoLayer) {
+    void show() {
+        // Ours asked for GD's own ("more info"), or one we don't cover.
+        if (this->getUserObject("vanilla"_spr) || !lazer::CommentsOverlay::wants(this)) return InfoLayer::show();
+        if (!lazer::CommentsOverlay::present(m_level, this)) InfoLayer::show();
+    }
+};
