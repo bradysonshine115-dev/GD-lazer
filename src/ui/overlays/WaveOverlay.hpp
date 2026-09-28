@@ -40,6 +40,9 @@ protected:
     cocos2d::CCSize bodySize() const { return m_body->getContentSize(); }
     // Rows placed in body() that should get hover / clicks.
     void addInteractive(SettingsRow* row) { m_interactive.push_back(row); }
+    void removeInteractive(SettingsRow* row);
+    // Forget the touch in progress (it turned into a scroll): no click on release.
+    void cancelPress() { m_pressed = nullptr; }
 
     virtual void onOpened() {}
     virtual void onUpdate(float dt) {}

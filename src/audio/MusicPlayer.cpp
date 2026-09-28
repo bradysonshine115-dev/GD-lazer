@@ -297,6 +297,29 @@ void MusicPlayer::unblockAll() {
     // Picked up the next time the playlist is built (menu music restart).
 }
 
+void MusicPlayer::unblock(int songID) {
+    m_blocked.erase(songID);
+    Mod::get()->setSavedValue("music-blocked", std::vector<int>(m_blocked.begin(), m_blocked.end()));
+    // Like unblockAll: back in the playlist the next time it's built.
+}
+
+std::vector<int> MusicPlayer::blocked() const {
+    std::vector<int> ids(m_blocked.begin(), m_blocked.end());
+    std::sort(ids.begin(), ids.end());
+    return ids;
+}
+
+std::pair<std::string, std::string> MusicPlayer::describe(int songID) {
+    if (songID < 0) {
+        int audio = -songID - 1;
+        return {LevelTools::getAudioTitle(audio), LevelTools::nameForArtist(LevelTools::artistForAudio(audio))};
+    }
+    if (auto info = MusicDownloadManager::sharedState()->getSongInfoObject(songID); info && !info->m_songName.empty()) {
+        return {info->m_songName, info->m_artistName};
+    }
+    return {fmt::format("Song {}", songID), ""};
+}
+
 void MusicPlayer::toggleShuffle() {
     m_shuffle = !m_shuffle;
     Mod::get()->setSavedValue("music-shuffle", m_shuffle);

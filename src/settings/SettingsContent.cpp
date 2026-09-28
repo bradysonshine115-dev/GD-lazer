@@ -3,6 +3,7 @@
 #include "../audio/MusicPlayer.hpp"
 #include "../ui/core/Text.hpp"
 #include "../ui/menu/MenuBackground.hpp"
+#include "../ui/overlays/BlockedSongsOverlay.hpp"
 #include "../ui/overlays/SettingsOverlay.hpp"
 #include "../ui/overlays/SettingsRows.hpp"
 #include "../update/Updater.hpp"
@@ -214,10 +215,13 @@ void buildSettings(SettingsOverlay* overlay, MenuLayer* menu, MenuBackground* ba
     );
     musicRow->setTooltip("Plays your downloaded levels' songs instead of the menu theme, with the level's thumbnail as the background. Applies the next time the menu loads.");
     overlay->addRow(musicRow);
-    auto unblockRow = ButtonRow::create("Unblock all songs", w, k, [] { MusicPlayer::get().unblockAll(); });
-    unblockRow->setTooltip("Songs you blocked in the music player (the ban button) can play again.");
-    unblockRow->setShownIf([] { return MusicPlayer::get().blockedCount() > 0; });
-    overlay->addRow(unblockRow);
+    auto blockedRow = ButtonRow::create("Blocked songs", w, k, [overlay] {
+        overlay->close();
+        BlockedSongsOverlay::present();
+    });
+    blockedRow->setTooltip("Songs you blocked in the music player (the ban button): unblock them one by one or all at once.");
+    blockedRow->setShownIf([] { return MusicPlayer::get().blockedCount() > 0; });
+    overlay->addRow(blockedRow);
 
     overlay->addSubsection("Updates");
     auto updatesRow = ToggleRow::create(

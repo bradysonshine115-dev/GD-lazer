@@ -155,6 +155,12 @@ bool WaveOverlay::back() {
     return true;
 }
 
+void WaveOverlay::removeInteractive(SettingsRow* row) {
+    std::erase(m_interactive, row);
+    if (m_hovered == row) m_hovered = nullptr;
+    if (m_pressed == row) m_pressed = nullptr;
+}
+
 SettingsRow* WaveOverlay::rowAt(CCPoint world) {
     for (auto row : m_interactive) {
         if (!row->isVisible()) continue;

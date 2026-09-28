@@ -76,6 +76,11 @@ public:
     void blockCurrent();
     size_t blockedCount() const { return m_blocked.size(); }
     void unblockAll();
+    void unblock(int songID);
+    // Blocked song IDs, sorted.
+    std::vector<int> blocked() const;
+    // A song's title and artist from GD's song info (or RobTop's list).
+    static std::pair<std::string, std::string> describe(int songID);
 
     // Song select takes over the channel with our song still playing (osu! keeps
     // the track going into song select): returns its path, or "" if nothing of
