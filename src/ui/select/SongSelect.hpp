@@ -79,6 +79,15 @@ protected:
     enum class Group { Saved, Official, Liked };
     enum class Board { Hidden, Loading, Loaded, Failed };
     enum class LoaderPhase { In, Out, Pushed, Cancelling };
+    // The level behind the loader: built while the card shows, entered at the push.
+    enum class LevelLoad { Waiting, Queued, Loaded };
+    // A music track GD's audio engine is playing, by its music ID.
+    struct Music {
+        int id;
+        int channel;
+        void* sound;
+        bool operator==(Music const&) const = default;
+    };
 
     struct Panel {
         size_t entry;
@@ -129,6 +138,11 @@ protected:
     void buildLoader(levels::Entry const& e);
     void updateLoader(float dt);
     void cancelLoader();
+    // Builds the level while the loader is up (osu!'s prepareNewPlayer).
+    void loadLevel();
+    // Drops a level that was built but never entered (cancelled).
+    void dropLevel();
+    static std::vector<Music> currentMusic();
     // A level without its data or song: fetch them behind the loader first.
     void startDownloads(levels::Entry const& e);
     void updateDownloads(float dt);
@@ -260,6 +274,16 @@ protected:
     RoundedBox* m_loaderFill = nullptr;
     float m_loaderBarW = 0;
     Tweened<float> m_downloadProgress {0.f};
+    LevelLoad m_levelLoad = LevelLoad::Waiting;
+    geode::Ref<cocos2d::CCScene> m_levelScene;
+    // What PlayLayer::init told GameManager, held back until the push.
+    PlayLayer* m_levelPlayLayer = nullptr;
+    GJBaseGameLayer* m_levelGameLayer = nullptr;
+    // Song select's music (the preview) that building the level left alone:
+    // faded and stopped at the push.
+    std::vector<Music> m_selectMusic;
+    Tweened<float> m_spinnerAlpha {1.f};
+    Tweened<float> m_spinnerScale {1.f};
     LoaderPhase m_loaderPhase = LoaderPhase::In;
     float m_loaderMs = 0;
     std::vector<cocos2d::CCNode*> m_uiRoots;               // song select's own nodes, faded out
