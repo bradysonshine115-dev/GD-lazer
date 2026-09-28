@@ -5,6 +5,8 @@
 // release, and taps. It shows wherever GD would show the system cursor.
 // PC only: phones have no pointer.
 
+#include "MenuCursor.hpp"
+
 #include <Geode/Geode.hpp>
 
 #ifdef GEODE_IS_WINDOWS
@@ -285,6 +287,18 @@ class $modify(LazerCursorView, CCEGLView) {
 // Only once the game has loaded (the intro is starting): the loading screen
 // stutters, and a drawn cursor would stutter with it. The system cursor
 // stays until then.
+void lazer::releaseMenuCursor() {
+    if (g_cursor) {
+        g_cursor->release();
+        g_cursor = nullptr;
+    }
+    g_dropped = false;
+    if (g_enabled) {
+        g_enabled = false;
+        CCEGLView::get()->showCursor(g_gdShowsCursor);
+    }
+}
+
 $on_game(Loaded) {
     Loader::get()->queueInMainThread([] { lazer::createCursor(); });
 }
@@ -295,13 +309,8 @@ $on_game(Loaded) {
 class $modify(LazerCursorReload, GameManager) {
     void reloadAll(bool switchingModes, bool toFullscreen, bool borderless, bool fix, bool unused) {
         if (lazer::g_cursor) {
-            lazer::g_cursor->release();
-            lazer::g_cursor = nullptr;
+            lazer::releaseMenuCursor();
             lazer::g_dropped = true;
-            if (lazer::g_enabled) {
-                lazer::g_enabled = false;
-                CCEGLView::get()->showCursor(lazer::g_gdShowsCursor);
-            }
         }
         GameManager::reloadAll(switchingModes, toFullscreen, borderless, fix, unused);
     }

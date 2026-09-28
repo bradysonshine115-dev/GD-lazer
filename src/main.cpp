@@ -20,6 +20,7 @@
 #include "ui/menu/Toolbar.hpp"
 #include "ui/select/SongSelect.hpp"
 #include "update/Updater.hpp"
+#include "ui/core/MenuCursor.hpp"
 #include "ui/overlays/AchievementsOverlay.hpp"
 #include "ui/overlays/Dialog.hpp"
 #include "ui/overlays/QuestsOverlay.hpp"
@@ -471,7 +472,8 @@ class $modify(LazerMenuLayer, MenuLayer) {
     void quitGame() {
         if (g_exiting) return;
         g_exiting = true;
-        if (!Mod::get()->getSettingValue<bool>("intro")) return this->endGame();
+        lazer::releaseMenuCursor();
+        if (!Mod::get()->getSettingValue<bool>("intro")) return this->quitLikeGD();
 
         auto& f = m_fields;
         this->closeOverlaysExcept(nullptr);
@@ -482,7 +484,18 @@ class $modify(LazerMenuLayer, MenuLayer) {
 
         Ref<MenuLayer> self = this;
         float logoRadius = f->buttons ? f->buttons->logoRadius() : 0.f;
-        this->addChild(Outro::create(logoRadius, [self] { self->endGame(); }), 1000);
+        this->addChild(Outro::create(logoRadius, [self] { static_cast<LazerMenuLayer*>(self.data())->quitLikeGD(); }), 1000);
+    }
+
+    // GD's quit popup's "yes": it saves the game while everything still runs,
+    // then ends. (Just ending saves during shutdown, after Geode's async
+    // runtime is gone, and mods saving through it crash: BetterInfo.) A
+    // stand-in alert with the quit popup's tag (0) takes that branch.
+    void quitLikeGD() {
+        auto alert = FLAlertLayer::create(nullptr, "", "", "", nullptr);
+        if (!alert) return this->endGame();
+        alert->setTag(0);
+        MenuLayer::FLAlert_Clicked(alert, true);
     }
 
     void setupBackground() {
