@@ -1028,7 +1028,7 @@ void SongSelect::updateLoader(float dt) {
                 // stays, which stopping all music would throw away.
                 auto playing = currentMusic();
                 for (auto const& m : m_selectMusic) {
-                    if (std::find(playing.begin(), playing.end(), m) != playing.end()) engine->stopAndRemoveMusic(m.id);
+                    if (std::ranges::any_of(playing, [&](Music const& p) { return p == m; })) engine->stopAndRemoveMusic(m.id);
                 }
                 m_selectMusic.clear();
                 // GameManager learns about the level as it's entered, as when
@@ -1124,7 +1124,7 @@ void SongSelect::loadLevel() {
     auto after = currentMusic();
     m_selectMusic.clear();
     for (auto const& m : before) {
-        if (std::find(after.begin(), after.end(), m) != after.end()) m_selectMusic.push_back(m);
+        if (std::ranges::any_of(after, [&](Music const& a) { return a == m; })) m_selectMusic.push_back(m);
     }
 
     // Loaded: the spinner goes (LoadingSpinner.PopOut).
