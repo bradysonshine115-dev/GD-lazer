@@ -1,7 +1,12 @@
 #include "Updater.hpp"
 
-#include <Geode/ui/MDPopup.hpp>
+#include "../ui/core/Text.hpp"
+#include "../ui/core/Theme.hpp"
+#include "../ui/overlays/Dialog.hpp"
+
 #include <Geode/utils/web.hpp>
+#include <atomic>
+#include <cstring>
 #include <sstream>
 #include <thread>
 
@@ -51,35 +56,140 @@ namespace {
         if (done) done();
     }
 
-    // Shows a popup in the Lazer style (PopupStyle restyles popups carrying this marker).
-    template <class T>
-    T* lazerStyled(T* popup) {
-        popup->setUserObject("restyle"_spr, CCBool::create(true));
-        popup->show();
-        return popup;
+    // The dialog showing the update, kept so a check or download can report
+    // into it. Null (or closing) once the player closed it.
+    Ref<Dialog> g_dialog;
+    std::atomic<size_t> g_downloaded {0};
+    std::atomic<size_t> g_downloadTotal {0};
+
+    Dialog* openDialog() {
+        return g_dialog && !g_dialog->closing() && g_dialog->getParent() ? g_dialog.data() : nullptr;
+    }
+
+    // Shows `content` in the open update dialog, or a new one.
+    void present(Dialog::Content content) {
+        if (auto dialog = openDialog()) {
+            dialog->stopAllActions(); // the download's progress polling
+            dialog->setContent(std::move(content));
+        }
+        else g_dialog = Dialog::show(std::move(content));
+    }
+
+    std::string megabytes(size_t bytes) {
+        return fmt::format("{:.1f} MB", bytes / (1024.0 * 1024.0));
+    }
+
+    // changelog.md's markdown as dialog items: version headings and bullets.
+    std::vector<CCNode*> notesItems(std::string const& notes) {
+        std::vector<CCNode*> items;
+        float k = unitScale();
+        float width = Dialog::listWidth();
+        std::istringstream in(notes);
+        std::string line;
+        while (std::getline(in, line)) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            // Drop markdown emphasis; the dialog's text is plain.
+            for (auto mark : {"**", "__", "`"}) {
+                for (size_t at; (at = line.find(mark)) != std::string::npos;) line.erase(at, std::strlen(mark));
+            }
+            if (line.starts_with("## ")) {
+                auto holder = CCNode::create();
+                auto title = makeText(line.substr(3), Weight::SemiBold, 19 * k);
+                title->setAnchorPoint({0, 1});
+                title->setPosition({0, items.empty() ? 0.f : -10 * k});
+                holder->addChild(title);
+                holder->setContentSize({width, (items.empty() ? 28 : 38) * k});
+                items.push_back(holder);
+            } else if (line.starts_with("- ") || line.starts_with("* ")) {
+                auto holder = CCNode::create();
+                auto bullet = makeText("\xE2\x80\xA2", Weight::Bold, 15 * k); // U+2022
+                bullet->setColor(theme::LIGHT1);
+                bullet->setAnchorPoint({0, 1});
+                holder->addChild(bullet);
+                auto text = makeWrappedText(line.substr(2), 15 * k, width - 16 * k, theme::CONTENT2);
+                text->setPositionX(16 * k);
+                holder->addChild(text);
+                holder->setContentSize({width, text->getContentSize().height + 6 * k});
+                items.push_back(holder);
+            } else if (!line.empty()) {
+                auto text = makeWrappedText(line, 15 * k, width, theme::CONTENT2);
+                text->setContentSize({width, text->getContentSize().height + 6 * k});
+                items.push_back(text);
+            }
+        }
+        return items;
     }
 
     void showRestartPrompt() {
-        lazerStyled(createQuickPopup(
-            "Lazer UI updated",
-            fmt::format("<cg>{}</c> is installed. Restart Geometry Dash to use it.", g_latest),
-            "Later", "Restart",
-            [](auto, bool restart) {
-                if (restart) game::restart(true);
-            },
-            false
-        ));
+        Dialog::Content content;
+        content.icon = icon::CLOUD_DOWN;
+        content.header = "Lazer UI updated";
+        content.body = fmt::format("{} is installed. Restart Geometry Dash to use it.", g_latest);
+        content.buttons = {
+            {"Restart now", Dialog::Kind::Ok, [] { game::restart(true); }},
+            {"Later", Dialog::Kind::Cancel, nullptr},
+        };
+        present(std::move(content));
+    }
+
+    void showFailed(std::string const& header, std::string const& body, bool releasesLink) {
+        Dialog::Content content;
+        content.icon = icon::TRIANGLE_EXCLAMATION;
+        content.header = header;
+        content.body = body;
+        if (releasesLink) {
+            content.buttons.push_back({"Open the releases page", Dialog::Kind::Ok, [] { web::openLinkInBrowser(RELEASES_PAGE); }});
+        }
+        content.buttons.push_back({"OK", Dialog::Kind::Cancel, nullptr});
+        present(std::move(content));
+    }
+
+    void showDownloading() {
+        Dialog::Content content;
+        content.icon = icon::CLOUD_DOWN;
+        content.header = fmt::format("Downloading {}", g_latest);
+        content.body = "It installs when the download finishes, and applies on the next start.";
+        content.progress = true;
+        // Hidden, the download carries on and reports back in a new dialog.
+        content.buttons = {{"Hide", Dialog::Kind::Cancel, nullptr}};
+        present(std::move(content));
+
+        // Poll the worker's progress while the dialog shows it.
+        if (auto dialog = openDialog()) {
+            Ref<Dialog> watched = dialog;
+            dialog->runAction(CCRepeatForever::create(CCSequence::create(
+                CCDelayTime::create(0.05f),
+                CallFuncExt::create([watched] {
+                    size_t done = g_downloaded, total = g_downloadTotal;
+                    if (total > 0) {
+                        watched->setProgress(float(done) / float(total), fmt::format("{} of {}", megabytes(done), megabytes(total)));
+                    } else {
+                        watched->setProgress(0.f, done > 0 ? megabytes(done) : "Connecting...");
+                    }
+                }),
+                nullptr
+            )));
+        }
     }
 
     void install() {
         if (g_state != State::Available) return;
         g_state = State::Downloading;
+        g_downloaded = 0;
+        g_downloadTotal = 0;
         std::string version = g_latest;
         auto target = Mod::get()->getPackagePath();
+        showDownloading();
 
         std::thread([version, target] {
             // Blocking request on a worker thread (the coroutine web API crashes this MSVC's compiler).
-            auto res = web::WebRequest().timeout(std::chrono::seconds(120)).getSync(fmt::format(RELEASE_URL, version));
+            auto res = web::WebRequest()
+                .timeout(std::chrono::seconds(120))
+                .onProgress([](web::WebProgress const& progress) {
+                    g_downloaded = progress.downloaded();
+                    g_downloadTotal = progress.downloadTotal();
+                })
+                .getSync(fmt::format(RELEASE_URL, version));
             std::string error;
             if (res.code() == 404) {
                 error = "the release for this version isn't published yet. Try again in a few minutes.";
@@ -117,14 +227,7 @@ namespace {
                     g_state = State::Available; // still out there, can retry
                     g_error = error;
                     log::warn("Update download failed: {}", error);
-                    lazerStyled(createQuickPopup(
-                        "Update failed", fmt::format("Couldn't install {}: {}", g_latest, error),
-                        "OK", "Open releases",
-                        [](auto, bool open) {
-                            if (open) web::openLinkInBrowser(RELEASES_PAGE);
-                        },
-                        false
-                    ));
+                    showFailed("Update failed", fmt::format("Couldn't install {}: {}", g_latest, error), true);
                     return;
                 }
                 g_state = State::Installed;
@@ -136,11 +239,17 @@ namespace {
 
     void showUpdatePrompt() {
         g_prompted = true;
-        auto text = fmt::format("Lazer UI **{}** is out. You have {}.\n\n", g_latest, Mod::get()->getVersion().toVString());
-        text += g_notes.empty() ? "No release notes for this version." : g_notes;
-        lazerStyled(MDPopup::create(fmt::format("Update to {}", g_latest), text, "Later", "Update", [](bool update) {
-            if (update) install();
-        }));
+        Dialog::Content content;
+        content.icon = icon::CLOUD_DOWN;
+        content.header = fmt::format("Lazer UI {} is out", g_latest);
+        content.body = fmt::format("You have {}.", Mod::get()->getVersion().toVString());
+        content.items = notesItems(g_notes.empty() ? "No release notes for this version." : g_notes);
+        content.listHeight = 300;
+        content.buttons = {
+            {"Update", Dialog::Kind::Ok, [] { install(); }, false},
+            {"Later", Dialog::Kind::Cancel, nullptr},
+        };
+        present(std::move(content));
     }
 }
 
@@ -213,22 +322,34 @@ void onMenu(CCNode* menu, float delay) {
 }
 
 void checkManually() {
-    if (g_state == State::Downloading) return;
+    if (g_state == State::Downloading) return showDownloading();
     if (g_state == State::Installed) return showRestartPrompt();
+
+    Dialog::Content checking;
+    checking.icon = icon::CLOUD_DOWN;
+    checking.header = "Checking for updates";
+    checking.body = "Looking for a newer Lazer UI on GitHub...";
+    checking.buttons = {{"Cancel", Dialog::Kind::Cancel, nullptr}};
+    present(std::move(checking));
+
     check([] {
+        // Cancelled while checking: say nothing (an update still shows next start).
+        if (!openDialog()) return;
         switch (g_state) {
             case State::Available:
                 showUpdatePrompt();
                 break;
-            case State::UpToDate:
-                lazerStyled(createQuickPopup(
-                    "No updates", fmt::format("You have the latest version ({}).", Mod::get()->getVersion().toVString()),
-                    "OK", nullptr, [](auto, bool) {}, false
-                ));
+            case State::UpToDate: {
+                Dialog::Content content;
+                content.icon = icon::CLOUD_DOWN;
+                content.header = "You're up to date";
+                content.body = fmt::format("{} is the newest Lazer UI.", Mod::get()->getVersion().toVString());
+                content.buttons = {{"OK", Dialog::Kind::Cancel, nullptr}};
+                present(std::move(content));
                 break;
+            }
             case State::Failed:
-                lazerStyled(createQuickPopup("Update check failed", fmt::format("Couldn't check for updates: {}", g_error),
-                                             "OK", nullptr, [](auto, bool) {}, false));
+                showFailed("Update check failed", fmt::format("Couldn't check for updates: {}", g_error), true);
                 break;
             default:
                 break;
