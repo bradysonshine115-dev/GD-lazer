@@ -75,6 +75,7 @@ It replaces GD's menus, not its gameplay. GD's own screens and handlers still ru
 - Searchable settings covering GD's options and the mod's own, including account actions (save, load, refresh login, unlink)
 - Daily chests, quests, achievements (filters, search, categories), statistics
 - Account card and a redesigned profile page for any player
+- A level's comments (the level page's info button) as an osu!-style page: its description, ID and dates, newest or top comments, posting and voting, and GD's own info page one tap away
 - GD's popups restyled to match
 
 **Pause and level complete**
@@ -103,7 +104,7 @@ None of these are required. The matching extras appear when a mod is installed.
 ## How it works
 
 - **`early-load`** is set so the mod can restyle GD's loading screen from its first frame. Nothing else runs early. At that point the mod's own resources aren't loaded yet, so the loading screen is drawn entirely in code.
-- **GD layers run hidden.** Several overlays drive GD's own layers (RewardsPage, ChallengesPage, ProfilePage, AccountLayer, CreatorLayer...) kept hidden and non-interactive, and call their handlers. GD's logic, networking and saving are never reimplemented.
+- **GD layers run hidden.** Several overlays drive GD's own layers (RewardsPage, ChallengesPage, ProfilePage, InfoLayer, AccountLayer, CreatorLayer...) kept hidden and non-interactive, and call their handlers. GD's logic, networking and saving are never reimplemented.
 - **Networking:** level thumbnails, fetched from the Level Thumbnails community server (`levelthumbs.prevter.me`) and cached on disk, and the update check: `mod.json` and `changelog.md` from this repo's `main` branch, plus the GitHub release when you choose to update. No accounts, analytics or other requests.
 - **Settings:** everything can be switched off. `enabled` turns the whole mod off; the intro/outro, music player, popup restyle, profile restyle, pause and results restyle, background dim, blur and triangles each have their own toggle.
 
