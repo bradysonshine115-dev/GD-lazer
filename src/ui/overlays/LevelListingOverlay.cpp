@@ -52,7 +52,7 @@ namespace {
     // GD reports its own request failures; this catches one that never reports.
     constexpr float LOAD_TIMEOUT_MS = 30000.f;
     constexpr float SPIN_SPEED = 300.f;         // spinner, degrees per second
-    constexpr int PAGE_SIZE = 10;               // levels per GD page
+    constexpr int LEVELS_PER_PAGE = 10;               // levels per GD page
     constexpr int QUERY_LIMIT = 20;             // GD's search box
 
     constexpr ccColor4B CLEAR {0, 0, 0, 0};
@@ -511,7 +511,7 @@ void LevelListingOverlay::levelsLoaded(CCArray* items, char const* key) {
     // Another page? GD says how far this one reached; failing that, a short page is the last.
     if (count == 0 || added == 0) m_more = false;
     else if (m_pendingTotal >= 0 && m_pendingEnd >= 0) m_more = m_pendingEnd < m_pendingTotal;
-    else m_more = count >= PAGE_SIZE;
+    else m_more = count >= LEVELS_PER_PAGE;
     m_pendingTotal = m_pendingEnd = -1;
     m_state = State::Loaded;
     layoutCards();
