@@ -679,8 +679,9 @@ float LevelListingOverlay::buildFilterRow(Row row, float y, float x, float width
             float pillH = (ROW_LINE - 3) * k;
             tab.activeBg = RoundedBox::create({textW, pillH}, pillH / 2, WHITE);
             tab.node->addChild(tab.activeBg, 1);
-            tab.activeIcon = makeIcon(icon::CIRCLE_XMARK, 10 * k);
-            tab.activeIcon->setColor(theme::rgb(m_scheme.background4()));
+            auto cross = makeIcon(icon::CIRCLE_XMARK, 10 * k);
+            cross->setColor(theme::rgb(m_scheme.background4()));
+            tab.activeIcon = cross;
             tab.node->addChild(tab.activeIcon, 3);
         }
         tab.active = [this, row, i] { return this->optionActive(row, static_cast<int>(i)); };
