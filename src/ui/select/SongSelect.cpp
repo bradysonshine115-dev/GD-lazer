@@ -6,6 +6,7 @@
 #include "../core/Text.hpp"
 #include "../core/Theme.hpp"
 #include "../menu/MenuBackground.hpp"
+#include "../overlays/Dialog.hpp"
 
 #include <Geode/modify/GameManager.hpp>
 #include <Geode/modify/LevelInfoLayer.hpp>
@@ -74,12 +75,6 @@ namespace {
         int seconds = ms / 1000 % 60;
         if (minutes > 0) return fmt::format("{}:{:02}.{:03}", minutes, seconds, ms % 1000);
         return fmt::format("{}.{:03}", seconds, ms % 1000);
-    }
-
-    // Our popups get the Lazer look (see PopupStyle).
-    void showStyled(FLAlertLayer* popup) {
-        popup->setUserObject("restyle"_spr, CCBool::create(true));
-        popup->show();
     }
 
     // Stars for classic levels, moons for platformers.
@@ -447,40 +442,33 @@ void SongSelect::closeFolders() {
 void SongSelect::confirmDeleteUnhearted() {
     int count = levels::countUnhearted();
     if (count == 0) {
-        showStyled(createQuickPopup("Nothing to delete", "Every saved level is hearted or in a folder.", "OK", nullptr,
-                                    [](auto, bool) {}, false));
+        Dialog::show(icon::CIRCLE_INFO, "Nothing to delete", "Every saved level is hearted or in a folder.",
+                     {{"OK", Dialog::Kind::Cancel, nullptr}});
         return;
     }
     Ref<SongSelect> self = this;
-    showStyled(createQuickPopup(
-        "Delete unhearted levels",
-        fmt::format("Delete <cr>{}</c> saved level{} that aren't hearted or in a folder? This can't be undone.",
-                    count, count == 1 ? "" : "s"),
-        "Cancel", "Delete",
-        [self](auto, bool yes) {
-            if (!yes) return;
+    Dialog::show(icon::TRASH, "Delete unhearted levels?",
+        fmt::format("{} saved level{} that aren't hearted or in a folder. This can't be undone.",
+                    count, count == 1 ? "" : "s"), {
+        {"Yes. Go for it.", Dialog::Kind::Dangerous, [self] {
             levels::deleteUnhearted();
             self->m_entries = levels::all(self->m_kind);
             self->applyFilter();
-        },
-        false
-    ));
+        }},
+        {"No! Abort mission", Dialog::Kind::Cancel, nullptr},
+    });
 }
 
-// The selected saved level, after asking. The selection moves on to the next
-// level (the one before, at the end of the list).
+// The selected saved level, after asking (osu!'s BeatmapDeleteDialog). The
+// selection moves on to the next level (the one before, at the end of the list).
 void SongSelect::confirmDeleteLevel() {
     if (!m_hasSelection || m_selected >= m_visible.size()) return;
     auto const& e = m_entries[m_visible[m_selected]];
     if (e.official) return;
     Ref<GJGameLevel> level = e.level;
     Ref<SongSelect> self = this;
-    showStyled(createQuickPopup(
-        "Delete level",
-        fmt::format("Delete <cy>{}</c> by {}? This can't be undone.", e.name, e.creator),
-        "Cancel", "Delete",
-        [self, level](auto, bool yes) {
-            if (!yes) return;
+    Dialog::show(icon::TRASH, "Confirm deletion of", fmt::format("{} by {}", e.name, e.creator), {
+        {"Yes. Go for it.", Dialog::Kind::Dangerous, [self, level] {
             auto& visible = self->m_visible;
             auto& entries = self->m_entries;
             auto it = std::find_if(visible.begin(), visible.end(), [&](size_t i) { return entries[i].level == level; });
@@ -495,9 +483,9 @@ void SongSelect::confirmDeleteLevel() {
             levels::deleteLevel(deleted);
             entries = levels::all(self->m_kind);
             self->applyFilter();
-        },
-        false
-    ));
+        }},
+        {"No! Abort mission", Dialog::Kind::Cancel, nullptr},
+    });
 }
 
 // --- bottom: footer ---
@@ -727,6 +715,42 @@ void SongSelect::selectRandom() {
 void SongSelect::start() {
     if (!m_hasSelection || m_starting) return;
     auto const& e = m_entries[m_visible[m_selected]];
+    auto level = e.level;
+    int songID = level ? level->m_songID : 0;
+    auto songs = MusicDownloadManager::sharedState();
+    if (e.official || songID <= 0 || songs->isSongDownloaded(songID)) return play(true);
+
+    // What downloading means: the song's size when GD knows it, and the extras.
+    std::string what = "the song";
+    if (auto info = songs->getSongInfoObject(songID); info && info->m_fileSize > 0) {
+        what = fmt::format("the song ({:.1f} MB)", info->m_fileSize);
+    }
+    auto count = [](std::string const& ids) {
+        int n = 0;
+        for (auto part : utils::string::split(ids, ",")) if (!part.empty()) n++;
+        return n;
+    };
+    // m_songIDs includes the main song.
+    int moreSongs = std::max(0, count(level->m_songIDs) - 1);
+    int sfx = count(level->m_sfxIDs);
+    std::vector<std::string> extras;
+    if (moreSongs > 0) extras.push_back(fmt::format("{} more song{}", moreSongs, moreSongs == 1 ? "" : "s"));
+    if (sfx > 0) extras.push_back(fmt::format("{} sound effect{}", sfx, sfx == 1 ? "" : "s"));
+    for (size_t i = 0; i < extras.size(); i++) what += (i + 1 == extras.size() ? " and " : ", ") + extras[i];
+
+    Ref<SongSelect> self = this;
+    Dialog::show(icon::MUSIC, "Song not downloaded",
+        fmt::format("{} needs {} to play with music.", e.name, what), {
+        {"Download and play", Dialog::Kind::Ok, [self] { self->play(true); }},
+        {"Play without music", Dialog::Kind::Ok, [self] { self->play(false); }},
+        {"Cancel", Dialog::Kind::Cancel, nullptr},
+    });
+}
+
+void SongSelect::play(bool withSong) {
+    if (!m_hasSelection || m_starting) return;
+    auto const& e = m_entries[m_visible[m_selected]];
+    m_withSong = withSong;
     sfx::play(sfx::sound::MENU_PLAY_SELECT);
     closeFolders();
     m_starting = true;
@@ -753,7 +777,13 @@ void SongSelect::start() {
     m_metaAlpha.set(0);
     m_dimTween.set(BACKGROUND_DIM);
     m_dimTween.to(LOADER_DIM, 800, Easing::OutQuint);
-    if (!levels::readyToPlay(e)) startDownloads(e);
+    if (needsDownloads(e)) startDownloads(e);
+}
+
+// The level's data, and its song unless playing without.
+bool SongSelect::needsDownloads(levels::Entry const& e) const {
+    if (levels::readyToPlay(e)) return false;
+    return m_withSong || std::string(e.level->m_levelString).empty();
 }
 
 void SongSelect::buildLoader(levels::Entry const& e) {
@@ -806,7 +836,7 @@ void SongSelect::buildLoader(levels::Entry const& e) {
     main->addChild(m_spinner);
     m_loaderStatus = nullptr;
     m_loaderFill = nullptr;
-    if (!levels::readyToPlay(e)) {
+    if (needsDownloads(e)) {
         // Downloading first: the spinner moves up for a status line and a bar.
         m_spinner->setPositionY(60 * k);
         m_loaderStatus = makeText("downloading", Weight::Regular, 14 * k);
@@ -976,7 +1006,7 @@ void SongSelect::startDownloads(levels::Entry const& e) {
     }
     int songID = level->m_songID;
     auto songs = MusicDownloadManager::sharedState();
-    if (songID > 0 && !songs->isSongDownloaded(songID)) {
+    if (m_withSong && songID > 0 && !songs->isSongDownloaded(songID)) {
         songs->addMusicDownloadDelegate(this);
         // GD's song widget when it's this level's: it also fetches the level's
         // extra songs and SFX. Otherwise just the song.
@@ -996,7 +1026,7 @@ void SongSelect::updateDownloads(float dt) {
     auto songs = MusicDownloadManager::sharedState();
     int songID = level->m_songID;
     bool levelReady = !std::string(level->m_levelString).empty();
-    bool songReady = songID <= 0 || songs->isSongDownloaded(songID);
+    bool songReady = !m_withSong || songID <= 0 || songs->isSongDownloaded(songID);
     int percent = songReady ? 100 : songs->getDownloadProgress(songID);
 
     // GD reports no progress for the level's data (it's small): it counts as a fifth.
@@ -1028,7 +1058,7 @@ void SongSelect::updateDownloads(float dt) {
         }
         // Song select plays it straight away from now on.
         for (auto& entry : m_entries) {
-            if (entry.level == level && songID > 0) entry.songPath = songs->pathForSong(songID);
+            if (entry.level == level && songID > 0 && songs->isSongDownloaded(songID)) entry.songPath = songs->pathForSong(songID);
         }
     }
 }
@@ -2097,7 +2127,7 @@ void SongSelect::ccTouchEnded(CCTouch* touch, CCEvent*) {
 }
 
 void SongSelect::scrollWheel(float y, float) {
-    if (m_starting) return;
+    if (m_starting || Dialog::isOpen()) return;
     // Left side: the level details; right side: the carousel.
     if (geode::cocos::getMousePos().x < m_win.width - m_rightW) {
         if (m_details) m_details->scrollWheel(y, 0);
@@ -2109,6 +2139,7 @@ void SongSelect::scrollWheel(float y, float) {
 }
 
 void SongSelect::keyDown(enumKeyCodes key, double timestamp) {
+    if (Dialog::isOpen()) return;
     // GD's CCLayer::keyDown turns Escape into keyBackClicked: let it through.
     if (!m_hasSelection || m_starting) return CCLayer::keyDown(key, timestamp);
     switch (key) {
@@ -2137,6 +2168,7 @@ void SongSelect::keyDown(enumKeyCodes key, double timestamp) {
 }
 
 void SongSelect::keyBackClicked() {
+    if (Dialog::isOpen()) return;
     // During the loader, back cancels it (osu!'s back button does the same).
     if (m_starting) return cancelLoader();
     back();

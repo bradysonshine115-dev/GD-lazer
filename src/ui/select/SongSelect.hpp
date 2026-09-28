@@ -114,7 +114,11 @@ protected:
     void select(size_t visibleIndex, bool scroll = true);
     void selectRandom();
     // Play: osu!'s PlayerLoader, then the level.
+    // Plays the selected level. A saved level whose song isn't downloaded asks
+    // first: download it (and its extra songs and SFX), or play without.
     void start();
+    void play(bool withSong);
+    bool needsDownloads(levels::Entry const& e) const;
     void buildLoader(levels::Entry const& e);
     void updateLoader(float dt);
     void cancelLoader();
@@ -236,6 +240,7 @@ protected:
     cocos2d::CCNode* m_loaderMeta = nullptr;
     cocos2d::CCNode* m_spinner = nullptr;
     geode::Ref<GJGameLevel> m_loaderLevel;
+    bool m_withSong = true;             // the loader also downloads the song
     bool m_downloading = false;         // the loader waits for the level's data and song
     bool m_downloadFailed = false;
     float m_failedMs = 0;
