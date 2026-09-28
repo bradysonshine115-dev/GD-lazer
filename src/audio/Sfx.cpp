@@ -2,6 +2,7 @@
 
 #include <Geode/Geode.hpp>
 #include <Geode/binding/FMODAudioEngine.hpp>
+#include <Geode/fmod/fmod.hpp>
 
 #include <chrono>
 #include <random>
@@ -42,6 +43,46 @@ namespace {
         return true;
     }
 
+    // The menu's sounds get their own channel group, not GD's SFX one: their
+    // volume is the "UI sound volume" setting alone, so they still play with
+    // GD's SFX turned off.
+    FMOD::ChannelGroup* group() {
+        static FMOD::ChannelGroup* group = nullptr;
+        if (!group) {
+            auto engine = FMODAudioEngine::sharedEngine();
+            if (!engine || !engine->m_system) return nullptr;
+            if (engine->m_system->createChannelGroup("lazer-ui", &group) != FMOD_OK) group = nullptr;
+        }
+        return group;
+    }
+
+    FMOD::Sound* soundFor(char const* name) {
+        static std::unordered_map<std::string, FMOD::Sound*> cache;
+        auto it = cache.find(name);
+        if (it != cache.end()) return it->second;
+        auto engine = FMODAudioEngine::sharedEngine();
+        if (!engine || !engine->m_system) return nullptr;
+        FMOD::Sound* sound = nullptr;
+        if (engine->m_system->createSound(pathFor(name).c_str(), FMOD_DEFAULT | FMOD_CREATESAMPLE, nullptr, &sound) != FMOD_OK) sound = nullptr;
+        cache.emplace(name, sound);
+        return sound;
+    }
+
+    void playOnGroup(char const* name, float frequency, float volume) {
+        auto sound = soundFor(name);
+        auto target = group();
+        if (!sound || !target) return;
+        FMOD::Channel* channel = nullptr;
+        if (FMODAudioEngine::sharedEngine()->m_system->playSound(sound, target, true, &channel) != FMOD_OK || !channel) return;
+        channel->setVolume(volume);
+        channel->setPitch(frequency);
+        channel->setPaused(false);
+    }
+
+    float uiVolume() {
+        return Mod::get()->getSettingValue<int64_t>("ui-sound-volume") / 100.f;
+    }
+
     float randomBetween(float lo, float hi) {
         static std::mt19937 rng {std::random_device {}()};
         return std::uniform_real_distribution<float>(lo, hi)(rng);
@@ -49,15 +90,16 @@ namespace {
 }
 
 void play(char const* name, float pitchVariation, float frequency) {
-    float volume = Mod::get()->getSettingValue<int64_t>("ui-sound-volume") / 100.f;
+    float volume = uiVolume();
     if (volume <= 0.f || !debounce(name)) return;
 
     if (pitchVariation > 0.f) frequency *= randomBetween(1.f - pitchVariation, 1.f + pitchVariation);
-    FMODAudioEngine::sharedEngine()->playEffect(pathFor(name), frequency, 0.f, volume);
+    playOnGroup(name, frequency, volume);
 }
 
 void playCue(char const* name) {
-    FMODAudioEngine::sharedEngine()->playEffect(pathFor(name), 1.f, 0.f, 1.f);
+    float volume = uiVolume();
+    if (volume > 0.f) playOnGroup(name, 1.f, volume);
 }
 
 void hover(char const* name) {

@@ -2,7 +2,8 @@
 
 namespace lazer::sfx {
 
-// UI sounds, played through GD's effects channel (so GD's SFX volume applies).
+// UI sounds, played on their own channel group: the "UI sound volume" setting
+// is their volume, GD's SFX volume doesn't apply.
 // Names are files in resources/sounds without the extension. Sounds from
 // osu-resources by ppy Pty Ltd (CC-BY-NC 4.0).
 namespace sound {
@@ -53,8 +54,7 @@ namespace cue {
     inline constexpr char const* SEEYA = "intro-seeya";
 }
 
-// Plays a cue at full volume (GD's SFX volume still applies, the UI sound
-// setting doesn't).
+// Plays a cue (no debounce, no pitch variation) at the UI sound volume.
 void playCue(char const* name);
 
 // Plays `name` at `frequency` (speed and pitch, like osu!'s channel Frequency),

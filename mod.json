@@ -169,7 +169,7 @@
 		"ui-sound-volume": {
 			"type": "int",
 			"name": "UI sound volume",
-			"description": "Volume of the menu's hover and click sounds, in percent of GD's SFX volume. 0 turns them off.",
+			"description": "Volume of the menu's sounds (hover, click, intro). Separate from GD's SFX volume, so the menus can have sound with game SFX off. 0 turns them off.",
 			"default": 100,
 			"min": 0,
 			"max": 100,
