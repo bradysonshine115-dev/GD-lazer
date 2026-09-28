@@ -4,6 +4,7 @@
 #include "../core/RoundedBox.hpp"
 #include "../core/Text.hpp"
 #include "../core/Theme.hpp"
+#include "SettingsRows.hpp"
 
 #include <Geode/Geode.hpp>
 
@@ -35,6 +36,8 @@ namespace {
     GLubyte toByte(float a) { return static_cast<GLubyte>(std::clamp(a, 0.f, 1.f) * 255.f); }
 
     void setOpacityDeep(CCNode* node, GLubyte o) {
+        // Lists hold rows that set their own opacities: they're shown or hidden instead.
+        if (typeinfo_cast<ScrollArea*>(node)) return;
         if (auto rgba = typeinfo_cast<CCRGBAProtocol*>(node)) rgba->setOpacity(o);
         for (auto child : CCArrayExt<CCNode*>(node->getChildren())) setOpacityDeep(child, o);
     }
@@ -50,11 +53,26 @@ namespace {
 
 bool Dialog::isOpen() { return g_open > 0; }
 
+float Dialog::listWidth(float width) {
+    float k = unitScale();
+    auto win = CCDirector::get()->getWinSize();
+    return std::min(width * k, win.width - 40 * k) - 60 * k;
+}
+
 Dialog* Dialog::show(char const* icon, std::string const& header, std::string const& body, std::vector<Button> buttons) {
+    Content content;
+    content.icon = icon;
+    content.header = header;
+    content.body = body;
+    content.buttons = std::move(buttons);
+    return show(std::move(content));
+}
+
+Dialog* Dialog::show(Content content) {
     auto scene = CCDirector::get()->getRunningScene();
     if (!scene) return nullptr;
     auto ret = new Dialog();
-    if (!ret->init(icon, header, body, std::move(buttons))) {
+    if (!ret->init(std::move(content))) {
         delete ret;
         return nullptr;
     }
@@ -63,19 +81,68 @@ Dialog* Dialog::show(char const* icon, std::string const& header, std::string co
     return ret;
 }
 
-bool Dialog::init(char const* icon, std::string const& header, std::string const& body, std::vector<Button> buttons) {
+bool Dialog::init(Content content) {
     if (!CCLayer::init()) return false;
     g_open++;
     m_k = unitScale();
-    float k = m_k;
     auto win = CCDirector::get()->getWinSize();
-    m_width = std::min(WIDTH * k, win.width - 40 * k);
 
     m_dim = CCLayerColor::create({0, 0, 0, 0});
     this->addChild(m_dim);
+    // The content node scales around the card's centre.
+    m_content = CCNode::create();
+    m_content->setPosition(win / 2);
+    this->addChild(m_content);
+
+    build(std::move(content));
+
+    m_dimAlpha.to(0.5f, ENTER_MS, Easing::OutQuint);
+    m_alpha.to(1, ENTER_MS, Easing::OutQuint);
+    m_scale.to(1, 750, Easing::OutElasticHalf);
+    m_ringSize.to(RING, ENTER_MS * 1.5f, Easing::OutQuint);
+    sfx::play(sfx::sound::DIALOG_POP_IN);
+
+    this->setTouchEnabled(true);
+    this->setKeypadEnabled(true);
+    this->scheduleUpdate();
+    update(0);
+    return true;
+}
+
+void Dialog::setContent(Content content) {
+    if (m_closing) return;
+    build(std::move(content));
+    // A small pop, so the change is noticed.
+    m_scale.set(0.96f);
+    m_scale.to(1, 500, Easing::OutElasticHalf);
+    m_iconScale.set(0.6f);
+    m_iconScale.to(1, ENTER_MS, Easing::OutQuint);
+    update(0);
+}
+
+void Dialog::build(Content content) {
+    float k = m_k;
+    auto win = CCDirector::get()->getWinSize();
+    m_width = std::min(content.width * k, win.width - 40 * k);
+
+    if (m_column) m_column->removeFromParent();
+    m_buttons.clear();
+    m_pressed = nullptr;
+    m_holding = false;
+    m_scroll = nullptr;
+    m_items.clear();
+    m_rows.clear();
+    m_hoveredRow = m_pressedRow = nullptr;
+    m_rowDragging = false;
+    m_listTouch = false;
+    m_tooltipHolder = nullptr;
+    m_tooltip.clear();
+    m_progressTrack = m_progressFill = nullptr;
+    m_progressText = nullptr;
 
     // Laid out top-down from y = 0, then centred.
     auto column = CCNode::create();
+    m_column = column;
     float y = -40 * k;
 
     m_ring = RoundedBox::create({RING * k, RING * k}, RING / 2 * k, {0, 0, 0, 0});
@@ -89,7 +156,7 @@ bool Dialog::init(char const* icon, std::string const& header, std::string const
     m_icon = CCNode::create();
     m_icon->setPosition({0, ringY});
     column->addChild(m_icon);
-    auto glyph = makeIcon(icon, ICON * k);
+    auto glyph = makeIcon(content.icon ? content.icon : icon::CIRCLE_INFO, ICON * k);
     m_iconBaseScale = 1;
     float minX = FLT_MAX, minY = FLT_MAX, maxX = -FLT_MAX, maxY = -FLT_MAX;
     for (auto letter : CCArrayExt<CCNode*>(glyph->getChildren())) {
@@ -109,7 +176,7 @@ bool Dialog::init(char const* icon, std::string const& header, std::string const
     y -= (RING + 30) * k;
 
     float textW = m_width - 30 * k;
-    auto title = makeWrappedText(header, HEADER_SIZE * k, textW, theme::CONTENT1);
+    auto title = makeWrappedText(content.header, HEADER_SIZE * k, textW, theme::CONTENT1);
     y -= 4 * k;
     for (auto line : CCArrayExt<CCNode*>(title->getChildren())) {
         line->setAnchorPoint({0.5f, 1});
@@ -119,8 +186,8 @@ bool Dialog::init(char const* icon, std::string const& header, std::string const
     column->addChild(title);
     y -= title->getContentSize().height + 20 * k;
 
-    if (!body.empty()) {
-        auto text = makeWrappedText(body, BODY_SIZE * k, textW, theme::CONTENT2);
+    if (!content.body.empty()) {
+        auto text = makeWrappedText(content.body, BODY_SIZE * k, textW, theme::CONTENT2);
         for (auto line : CCArrayExt<CCNode*>(text->getChildren())) {
             line->setAnchorPoint({0.5f, 1});
             line->setPositionX(0);
@@ -129,10 +196,61 @@ bool Dialog::init(char const* icon, std::string const& header, std::string const
         column->addChild(text);
         y -= text->getContentSize().height;
     }
+
+    if (content.progress) {
+        y -= 24 * k;
+        m_progressWidth = m_width - 80 * k;
+        m_progressTrack = RoundedBox::create({m_progressWidth, 8 * k}, 4 * k, {255, 255, 255, 30});
+        m_progressTrack->setAnchorPoint({0, 0.5f});
+        m_progressTrack->setPosition({-m_progressWidth / 2, y});
+        column->addChild(m_progressTrack);
+        m_progressFill = RoundedBox::create({8 * k, 8 * k}, 4 * k, PINK);
+        m_progressFill->setAnchorPoint({0, 0.5f});
+        m_progressFill->setPosition({-m_progressWidth / 2, y});
+        column->addChild(m_progressFill);
+        m_progress.set(0);
+        y -= 22 * k;
+        m_progressText = makeText(" ", Weight::Regular, 15 * k);
+        m_progressText->setColor(theme::LIGHT1);
+        m_progressText->setPosition({0, y});
+        column->addChild(m_progressText);
+        y -= 10 * k;
+    }
+
+    if (!content.items.empty()) {
+        y -= 24 * k;
+        float listW = m_width - 60 * k;
+        bool tooltips = false;
+        for (auto item : content.items) {
+            m_items.push_back(item);
+            if (auto row = typeinfo_cast<SettingsRow*>(item)) {
+                m_rows.push_back(row);
+                tooltips = tooltips || !row->tooltip().empty();
+            }
+        }
+        float total = 0;
+        for (auto item : m_items) total += item->getContentSize().height;
+        float listH = std::min(total, content.listHeight * k);
+        m_scroll = ScrollArea::create({listW, listH});
+        m_scroll->setPosition({-listW / 2, y - listH});
+        column->addChild(m_scroll);
+        for (auto item : m_items) m_scroll->content()->addChild(item);
+        layoutItems();
+        y -= listH;
+        if (tooltips) {
+            // The hovered (or last tapped) row's description.
+            y -= 12 * k;
+            m_tooltipWidth = listW;
+            m_tooltipHolder = CCNode::create();
+            m_tooltipHolder->setPosition({-listW / 2, y});
+            column->addChild(m_tooltipHolder);
+            y -= 15 * 1.15f * 2 * k;
+        }
+    }
     y -= 30 * k;
 
-    m_buttons.reserve(buttons.size());
-    for (auto& def : buttons) {
+    m_buttons.reserve(content.buttons.size());
+    for (auto& def : content.buttons) {
         ButtonNode b;
         b.def = std::move(def);
         b.root = CCNode::create();
@@ -160,7 +278,8 @@ bool Dialog::init(char const* icon, std::string const& header, std::string const
         m_buttons.push_back(std::move(b));
         y -= (BUTTON_HEIGHT + BUTTON_SPACING) * k;
     }
-    y -= 30 * k - BUTTON_SPACING * k;
+    if (m_buttons.empty()) y += 10 * k;
+    else y -= 30 * k - BUTTON_SPACING * k;
 
     float height = -y;
     // Short screens (phones, big UI scale): the whole dialog shrinks to fit.
@@ -170,24 +289,58 @@ bool Dialog::init(char const* icon, std::string const& header, std::string const
     card->setAnchorPoint({0.5f, 1});
     column->addChild(card, -1);
 
-    // The content node scales around the card's centre.
-    m_content = CCNode::create();
-    m_content->setPosition(win / 2);
     column->setPosition({0, height / 2});
     m_content->addChild(column);
-    this->addChild(m_content);
+}
 
-    m_dimAlpha.to(0.5f, ENTER_MS, Easing::OutQuint);
-    m_alpha.to(1, ENTER_MS, Easing::OutQuint);
-    m_scale.to(1, 750, Easing::OutElasticHalf);
-    m_ringSize.to(RING, ENTER_MS * 1.5f, Easing::OutQuint);
-    sfx::play(sfx::sound::DIALOG_POP_IN);
+void Dialog::layoutItems() {
+    if (!m_scroll) return;
+    float y = 0;
+    for (auto item : m_items) {
+        auto row = typeinfo_cast<SettingsRow*>(item);
+        bool shown = !row || row->applicable();
+        item->setVisible(shown);
+        if (!shown) continue;
+        if (row) {
+            // Rows are drawn up from their origin; anything else hangs below
+            // it (like makeWrappedText).
+            row->setAnchorPoint({0, 1});
+            row->setPosition({0, -y});
+        } else {
+            item->setPosition({0, -y});
+        }
+        y += item->getContentSize().height;
+    }
+    m_scroll->setContentHeight(y);
+}
 
-    this->setTouchEnabled(true);
-    this->setKeypadEnabled(true);
-    this->scheduleUpdate();
-    update(0);
-    return true;
+void Dialog::refreshRows() {
+    for (auto row : m_rows) row->refresh();
+    layoutItems();
+}
+
+void Dialog::setProgress(float progress, std::string const& text) {
+    if (!m_progressFill) return;
+    m_progress.to(std::clamp(progress, 0.f, 1.f), 200, Easing::OutQuint);
+    if (m_progressText) m_progressText->setString(text.empty() ? " " : text.c_str());
+}
+
+void Dialog::showTooltip(std::string const& text) {
+    if (!m_tooltipHolder || text == m_tooltip) return;
+    m_tooltip = text;
+    m_tooltipHolder->removeAllChildren();
+    if (text.empty()) return;
+    m_tooltipHolder->addChild(makeWrappedText(text, 15 * m_k, m_tooltipWidth, theme::LIGHT1));
+}
+
+SettingsRow* Dialog::rowAt(CCPoint world) {
+    for (auto row : m_rows) {
+        if (!row->isVisible()) continue;
+        auto local = row->convertToNodeSpace(world);
+        auto size = row->getContentSize();
+        if (local.x >= 0 && local.y >= 0 && local.x <= size.width && local.y <= size.height) return row;
+    }
+    return nullptr;
 }
 
 void Dialog::registerWithTouchDispatcher() {
@@ -229,6 +382,24 @@ void Dialog::update(float dt) {
 
     auto mouse = geode::cocos::getMousePos();
     float k = m_k;
+
+    if (m_scroll) m_scroll->setVisible(m_alpha.get() > 0.6f);
+    if (m_progressFill) {
+        m_progress.update(dt);
+        float h = 8 * k;
+        m_progressFill->setContentSize({std::max(h, m_progressWidth * m_progress.get()), h});
+    }
+    if (m_scroll && !m_closing && !m_rowDragging) {
+        auto hovered = m_scroll->containsWorldPoint(mouse) ? rowAt(mouse) : nullptr;
+        if (hovered != m_hoveredRow) {
+            if (m_hoveredRow) m_hoveredRow->setHovered(false);
+            m_hoveredRow = hovered;
+            if (hovered) {
+                hovered->setHovered(true);
+                showTooltip(hovered->tooltip());
+            }
+        }
+    }
     for (auto& b : m_buttons) {
         if (!m_closing) setHovered(b, buttonAt(mouse) == &b || (m_pressed == &b && m_holding));
         b.width.update(dt);
@@ -253,7 +424,8 @@ void Dialog::update(float dt) {
                 m_holding = false;
                 sfx::play(sfx::sound::DIALOG_DANGEROUS_SELECT);
                 auto action = b.def.action;
-                close();
+                if (b.def.closes) close();
+                else b.hold.to(0.f, 400, Easing::InSine);
                 if (action) action();
                 return;
             }
@@ -287,7 +459,20 @@ void Dialog::setHovered(ButtonNode& b, bool hovered) {
 
 bool Dialog::ccTouchBegan(CCTouch* touch, CCEvent*) {
     if (m_closing) return true;
-    m_pressed = buttonAt(touch->getLocation());
+    auto loc = touch->getLocation();
+    m_listTouch = false;
+    if (m_scroll && m_scroll->containsWorldPoint(loc)) {
+        m_listTouch = true;
+        m_drag.began(m_scroll, loc);
+        m_pressedRow = rowAt(loc);
+        if (m_pressedRow) showTooltip(m_pressedRow->tooltip());
+        if (m_pressedRow && m_pressedRow->wantsDrag()) {
+            m_rowDragging = true;
+            m_pressedRow->onDrag(m_pressedRow->convertToNodeSpace(loc));
+        }
+        return true;
+    }
+    m_pressed = buttonAt(loc);
     if (m_pressed) {
         m_pressed->width.to(HOVER_WIDTH * 0.98f, 800, Easing::OutQuad);
         if (m_pressed->def.kind == Kind::Dangerous) {
@@ -300,6 +485,12 @@ bool Dialog::ccTouchBegan(CCTouch* touch, CCEvent*) {
 }
 
 void Dialog::ccTouchMoved(CCTouch* touch, CCEvent*) {
+    if (m_listTouch) {
+        auto loc = touch->getLocation();
+        if (m_rowDragging && m_pressedRow) m_pressedRow->onDrag(m_pressedRow->convertToNodeSpace(loc));
+        else if (m_drag.moved(loc)) m_pressedRow = nullptr;
+        return;
+    }
     if (!m_pressed || m_pressed->def.kind != Kind::Dangerous) return;
     // Sliding off a held dangerous button lets go of it.
     bool over = buttonAt(touch->getLocation()) == m_pressed;
@@ -310,6 +501,22 @@ void Dialog::ccTouchMoved(CCTouch* touch, CCEvent*) {
 }
 
 void Dialog::ccTouchEnded(CCTouch* touch, CCEvent*) {
+    if (m_listTouch) {
+        m_listTouch = false;
+        auto row = m_pressedRow;
+        m_pressedRow = nullptr;
+        if (m_rowDragging) {
+            m_rowDragging = false;
+            refreshRows();
+            return;
+        }
+        auto loc = touch->getLocation();
+        if (m_drag.ended() || !row || m_closing || rowAt(loc) != row) return;
+        row->onClick(row->convertToNodeSpace(loc));
+        // A change in one row can change others (and what's shown).
+        if (!m_closing) refreshRows();
+        return;
+    }
     auto pressed = m_pressed;
     m_pressed = nullptr;
     if (!pressed || m_closing) return;
@@ -325,6 +532,13 @@ void Dialog::ccTouchEnded(CCTouch* touch, CCEvent*) {
 }
 
 void Dialog::ccTouchCancelled(CCTouch* touch, CCEvent* event) {
+    if (m_listTouch) {
+        m_listTouch = false;
+        m_rowDragging = false;
+        m_pressedRow = nullptr;
+        m_drag.ended();
+        return;
+    }
     if (m_pressed && m_pressed->def.kind == Kind::Dangerous) {
         m_holding = false;
         m_pressed->hold.to(0.f, 400, Easing::InSine);
@@ -338,7 +552,9 @@ void Dialog::press(ButtonNode& b) {
     b.width.to(b.width.get() * 1.05f, 100, Easing::OutQuint);
     sfx::play(b.def.kind == Kind::Cancel ? sfx::sound::DIALOG_CANCEL_SELECT : sfx::sound::DIALOG_OK_SELECT);
     auto action = b.def.action;
-    close();
+    if (b.def.closes) close();
+    else b.width.to(b.hovered ? HOVER_WIDTH : IDLE_WIDTH, 200, Easing::In);
+    // May replace the content (and this button): nothing after it.
     if (action) action();
 }
 

@@ -135,6 +135,33 @@ protected:
     std::string m_lastTitle, m_lastSubtitle;
 };
 
+// Label + a "< value >" stepper: the arrows step through the choices, a
+// click elsewhere on the row goes to the next one.
+class ChoiceRow : public SettingsRow {
+public:
+    static ChoiceRow* create(std::string const& label, float width, float k,
+                             std::function<std::string()> value, std::function<void(int)> step);
+    void setHovered(bool hovered) override;
+    void onClick(cocos2d::CCPoint local) override;
+    void refresh() override;
+    void update(float dt) override;
+
+    // Public so the shared create() helper can call it.
+    bool init(std::string const& label, float width, float k,
+              std::function<std::string()> value, std::function<void(int)> step);
+
+protected:
+    std::function<std::string()> m_value;
+    std::function<void(int)> m_step;
+    RoundedBox* m_hoverBg = nullptr;
+    RoundedBox* m_box = nullptr;
+    cocos2d::CCLabelBMFont* m_valueLabel = nullptr;
+    float m_boxWidth = 0, m_k = 1;
+    std::string m_last;
+    Tweened<float> m_hover {0.f};
+    Tweened<float> m_flash {0.f};
+};
+
 // Full-width rounded button.
 class ButtonRow : public SettingsRow {
 public:

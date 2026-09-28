@@ -306,6 +306,96 @@ void InfoRow::update(float) {
     refresh();
 }
 
+ChoiceRow* ChoiceRow::create(std::string const& label, float width, float k,
+                             std::function<std::string()> value, std::function<void(int)> step) {
+    return make<ChoiceRow>(label, width, k, std::move(value), std::move(step));
+}
+
+bool ChoiceRow::init(std::string const& label, float width, float k,
+                     std::function<std::string()> value, std::function<void(int)> step) {
+    if (!CCNode::init()) return false;
+    m_value = std::move(value);
+    m_step = std::move(step);
+    m_searchText = lower(label);
+    m_k = k;
+    float h = 40 * k;
+    this->setContentSize({width, h});
+
+    m_hoverBg = RoundedBox::create({width + 12 * k, h}, 5 * k, HOVER_BG);
+    m_hoverBg->setPosition({width / 2, h / 2});
+    m_hoverBg->setOpacity(0);
+    this->addChild(m_hoverBg);
+
+    m_boxWidth = std::min(220 * k, width * 0.5f);
+    auto text = makeText(label, Weight::Regular, 17 * k);
+    text->setAnchorPoint({0, 0.5f});
+    text->setPosition({0, h / 2});
+    float maxTextWidth = width - m_boxWidth - 12 * k;
+    if (text->getScaledContentSize().width > maxTextWidth) {
+        text->setScale(text->getScale() * maxTextWidth / text->getScaledContentSize().width);
+    }
+    this->addChild(text, 1);
+
+    m_box = RoundedBox::create({m_boxWidth, 30 * k}, 5 * k, theme::DARK3);
+    m_box->setAnchorPoint({1, 0.5f});
+    m_box->setPosition({width, h / 2});
+    this->addChild(m_box, 1);
+    float left = width - m_boxWidth;
+    auto prev = makeIcon(icon::CHEVRON_RIGHT, 12 * k);
+    prev->setScaleX(-prev->getScaleX());
+    prev->setColor(theme::LIGHT1);
+    prev->setPosition({left + 14 * k, h / 2});
+    this->addChild(prev, 2);
+    auto next = makeIcon(icon::CHEVRON_RIGHT, 12 * k);
+    next->setColor(theme::LIGHT1);
+    next->setPosition({width - 14 * k, h / 2});
+    this->addChild(next, 2);
+
+    m_valueLabel = makeText("", Weight::SemiBold, 16 * k);
+    m_valueLabel->setPosition({left + m_boxWidth / 2, h / 2});
+    this->addChild(m_valueLabel, 2);
+    refresh();
+    this->scheduleUpdate();
+    return true;
+}
+
+void ChoiceRow::refresh() {
+    auto value = m_value ? m_value() : "";
+    if (value == m_last) return;
+    m_last = value;
+    m_valueLabel->setString(value.c_str());
+    float base = m_valueLabel->getScaleY();
+    m_valueLabel->setScaleX(base);
+    float maxW = m_boxWidth - 44 * m_k;
+    if (m_valueLabel->getScaledContentSize().width > maxW) {
+        m_valueLabel->setScaleX(base * maxW / m_valueLabel->getScaledContentSize().width);
+    }
+}
+
+void ChoiceRow::setHovered(bool hovered) {
+    m_hover.to(hovered ? 1.f : 0.f, hovered ? 100.f : 300.f, Easing::OutQuint);
+}
+
+void ChoiceRow::onClick(CCPoint local) {
+    if (!m_step) return;
+    float width = this->getContentSize().width;
+    float left = width - m_boxWidth;
+    // The box's left half steps back; everything else steps forward.
+    int dir = local.x >= left && local.x < left + m_boxWidth / 2 ? -1 : 1;
+    sfx::play(sfx::sound::CHECK_ON);
+    m_step(dir);
+    m_flash.set(1.f);
+    m_flash.to(0.f, 300, Easing::OutQuint);
+    refresh();
+}
+
+void ChoiceRow::update(float dt) {
+    m_hover.update(dt);
+    m_flash.update(dt);
+    m_hoverBg->setOpacity(toByte(m_hover.get()));
+    m_box->setFillColor(theme::lerp(theme::DARK3, theme::COLOUR3, std::clamp(m_hover.get() * 0.35f + m_flash.get() * 0.65f, 0.f, 1.f)));
+}
+
 ButtonRow* ButtonRow::create(std::string const& label, float width, float k,
                              std::function<void()> action, bool dangerous) {
     return make<ButtonRow>(label, width, k, std::move(action), dangerous);
