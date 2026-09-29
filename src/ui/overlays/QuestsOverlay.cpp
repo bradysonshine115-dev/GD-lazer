@@ -55,7 +55,7 @@ QuestsOverlay* QuestsOverlay::create(float topInset) {
 bool QuestsOverlay::init(float topInset) {
     if (!WaveOverlay::init(topInset, SCHEME, icon::LIST_CHECK, "quests", "collect things, earn diamonds")) return false;
 
-    // GD's own page, invisible and without input (see RewardsOverlay).
+    // GD's own page, invisible and without input (see RewardsPopup).
     m_page = ChallengesPage::create();
     m_page->setUserObject("hidden"_spr, CCBool::create(true));
     m_page->setTouchEnabled(false);

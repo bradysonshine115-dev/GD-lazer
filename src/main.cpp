@@ -25,7 +25,7 @@
 #include "ui/overlays/Dialog.hpp"
 #include "ui/overlays/LevelListingOverlay.hpp"
 #include "ui/overlays/QuestsOverlay.hpp"
-#include "ui/overlays/RewardsOverlay.hpp"
+#include "ui/overlays/RewardsPopup.hpp"
 #include "ui/overlays/SettingsOverlay.hpp"
 #include "ui/overlays/StatsOverlay.hpp"
 #include "ui/startup/IntroSequence.hpp"
@@ -316,7 +316,6 @@ class $modify(LazerMenuLayer, MenuLayer) {
         lazer::Toolbar* toolbar = nullptr;
         lazer::MenuBackground* background = nullptr;
         lazer::SettingsOverlay* settings = nullptr;
-        lazer::RewardsOverlay* rewards = nullptr;
         lazer::QuestsOverlay* quests = nullptr;
         lazer::AchievementsOverlay* achievements = nullptr;
         lazer::StatsOverlay* stats = nullptr;
@@ -663,19 +662,10 @@ class $modify(LazerMenuLayer, MenuLayer) {
         }
     }
 
+    // The chests are a dialog over whatever's open, and open themselves.
     void toggleRewards() {
-        auto& rewards = m_fields->rewards;
-        if (!rewards) {
-            rewards = lazer::RewardsOverlay::create(m_fields->toolbar ? m_fields->toolbar->height() : 0);
-            rewards->setID("rewards"_spr);
-            this->addChild(rewards, 16);
-        }
-        if (rewards->isOpen()) {
-            rewards->close();
-        } else {
-            closeOverlaysExcept(rewards);
-            rewards->open();
-        }
+        if (lazer::Dialog::isOpen()) return;
+        lazer::showRewards();
     }
 
     void toggleQuests() {
@@ -727,7 +717,6 @@ class $modify(LazerMenuLayer, MenuLayer) {
     void closeOverlaysExcept(CCNode* keep) {
         auto& f = m_fields;
         if (f->settings && f->settings != keep) f->settings->close();
-        if (f->rewards && f->rewards != keep) f->rewards->close();
         if (f->quests && f->quests != keep) f->quests->close();
         if (f->achievements && f->achievements != keep) f->achievements->close();
         if (f->stats && f->stats != keep) f->stats->close();
@@ -744,7 +733,6 @@ class $modify(LazerMenuLayer, MenuLayer) {
             }
         };
         closeIf(f->settings);
-        closeIf(f->rewards);
         closeIf(f->quests);
         closeIf(f->achievements);
         closeIf(f->stats);
@@ -797,7 +785,6 @@ class $modify(LazerMenuLayer, MenuLayer) {
         if (m_fields->nowPlaying && m_fields->nowPlaying->back()) return true;
         if (m_fields->account && m_fields->account->back()) return true;
         if (m_fields->settings && m_fields->settings->back()) return true;
-        if (m_fields->rewards && m_fields->rewards->back()) return true;
         if (m_fields->quests && m_fields->quests->back()) return true;
         if (m_fields->achievements && m_fields->achievements->back()) return true;
         if (m_fields->stats && m_fields->stats->back()) return true;

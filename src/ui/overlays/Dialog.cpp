@@ -35,11 +35,12 @@ namespace {
 
     GLubyte toByte(float a) { return static_cast<GLubyte>(std::clamp(a, 0.f, 1.f) * 255.f); }
 
-    void setOpacityDeep(CCNode* node, GLubyte o) {
-        // Lists hold rows that set their own opacities: they're shown or hidden instead.
-        if (typeinfo_cast<ScrollArea*>(node)) return;
+    void setOpacityDeep(CCNode* node, GLubyte o, CCNode* skip) {
+        // Lists hold rows that set their own opacities, and so does a panel:
+        // they're shown or hidden instead.
+        if (node == skip || typeinfo_cast<ScrollArea*>(node)) return;
         if (auto rgba = typeinfo_cast<CCRGBAProtocol*>(node)) rgba->setOpacity(o);
-        for (auto child : CCArrayExt<CCNode*>(node->getChildren())) setOpacityDeep(child, o);
+        for (auto child : CCArrayExt<CCNode*>(node->getChildren())) setOpacityDeep(child, o, skip);
     }
 
     ccColor4B colourFor(Dialog::Kind kind) {
@@ -137,6 +138,7 @@ void Dialog::build(Content content) {
     m_listTouch = false;
     m_tooltipHolder = nullptr;
     m_tooltip.clear();
+    m_panel = nullptr;
     m_progressTrack = m_progressFill = nullptr;
     m_progressText = nullptr;
 
@@ -215,6 +217,16 @@ void Dialog::build(Content content) {
         m_progressText->setPosition({0, y});
         column->addChild(m_progressText);
         y -= 10 * k;
+    }
+
+    if (content.panel) {
+        y -= 24 * k;
+        m_panel = content.panel;
+        m_panel->setAnchorPoint({0.5f, 1});
+        m_panel->setPosition({0, y});
+        m_panel->setVisible(false);
+        column->addChild(m_panel);
+        y -= m_panel->getContentSize().height;
     }
 
     if (!content.items.empty()) {
@@ -384,6 +396,7 @@ void Dialog::update(float dt) {
     float k = m_k;
 
     if (m_scroll) m_scroll->setVisible(m_alpha.get() > 0.6f);
+    if (m_panel) m_panel->setVisible(m_alpha.get() > 0.6f);
     if (m_progressFill) {
         m_progress.update(dt);
         float h = 8 * k;
@@ -433,7 +446,7 @@ void Dialog::update(float dt) {
     }
 
     auto alpha = toByte(m_alpha.get());
-    for (auto child : CCArrayExt<CCNode*>(m_content->getChildren())) setOpacityDeep(child, alpha);
+    for (auto child : CCArrayExt<CCNode*>(m_content->getChildren())) setOpacityDeep(child, alpha, m_panel);
     for (auto& b : m_buttons) b.flash->setOpacity(toByte(b.flashAlpha.get() * m_alpha.get()));
     if (m_closing && m_alpha.get() <= 0.001f && m_dimAlpha.get() <= 0.001f) this->removeFromParent();
 }

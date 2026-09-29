@@ -9,7 +9,7 @@ namespace lazer {
 // GD's quests as an osu!-style overlay: three quest cards with progress bars
 // and diamond rewards. A hidden ChallengesPage does the real work (server,
 // timers, claiming and the diamond animation); this only presents it, like
-// RewardsOverlay does for chests.
+// RewardsPopup does for chests.
 class QuestsOverlay : public WaveOverlay {
 public:
     static QuestsOverlay* create(float topInset);

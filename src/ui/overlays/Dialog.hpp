@@ -41,6 +41,10 @@ public:
         // hover, clicks and drags; their tooltip shows under the list.
         std::vector<cocos2d::CCNode*> items;
         float listHeight = 340;  // at most, osu! pixels
+        // A node of its own under the body, laid out by its content size:
+        // not scrolled or clipped, and it keeps its own opacities so it can
+        // animate. It appears once the dialog has faded in.
+        cocos2d::CCNode* panel = nullptr;
         bool progress = false;   // a progress bar under the body (setProgress)
         float width = 500;       // osu! pixels (DialogOverlay's dialogs are 500)
     };
@@ -127,6 +131,7 @@ private:
     cocos2d::CCNode* m_tooltipHolder = nullptr;
     std::string m_tooltip;
     float m_tooltipWidth = 0;
+    cocos2d::CCNode* m_panel = nullptr;
 
     // Progress
     RoundedBox* m_progressTrack = nullptr;
