@@ -89,6 +89,15 @@ namespace {
         return label && label->getString() ? label->getString() : "";
     }
 
+    // Windows GD has no info text for these, so the tooltips are ours.
+    char const* parentalInfo(char const* variable) {
+        std::string_view key = variable ? variable : "";
+        if (key == "0075") return "Hides the comments on levels.";
+        if (key == "0076") return "Hides the comments on player profiles.";
+        if (key == "0077") return "Only featured levels show up when browsing online levels.";
+        return nullptr;
+    }
+
     constexpr float GRAPHICS_WIDTH = 640;
     constexpr int FPS_STEPS[] = {30, 60, 75, 90, 120, 144, 165, 180, 240, 280, 360, 480, 540, 1000};
 }
@@ -103,7 +112,8 @@ class $modify(LazerCaptureMoreVideo, MoreVideoOptionsLayer) {
 class $modify(LazerCaptureParental, ParentalOptionsLayer) {
     void addToggle(char const* label, char const* variable, char const* info) {
         ParentalOptionsLayer::addToggle(label, variable, info);
-        captureToggle(this, label, variable, info);
+        // GD on Windows passes only the label and variable: info is whatever was left in the register.
+        captureToggle(this, label, variable, parentalInfo(variable));
     }
 };
 
