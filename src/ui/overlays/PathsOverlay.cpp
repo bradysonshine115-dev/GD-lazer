@@ -56,7 +56,33 @@ namespace {
     // What paying for a path takes: GD's store items pay in mana orbs, the
     // diamond shop's in diamond shards.
     char const* currencyName(std::string const& key) { return key == "29" ? "diamond shards" : "mana orbs"; }
-    char const* currencyFrame(std::string const& key) { return key == "29" ? "GJ_diamondsIcon_001.png" : "currencyOrbIcon_001.png"; }
+
+    // What kind of thing an unlock is, as GD's item info calls it.
+    char const* unlockName(UnlockType type) {
+        switch (type) {
+            case UnlockType::Cube: return "cube";
+            case UnlockType::Col1: return "main color";
+            case UnlockType::Col2: return "secondary color";
+            case UnlockType::Ship: return "ship";
+            case UnlockType::Ball: return "ball";
+            case UnlockType::Bird: return "ufo";
+            case UnlockType::Dart: return "wave";
+            case UnlockType::Robot: return "robot";
+            case UnlockType::Spider: return "spider";
+            case UnlockType::Streak: return "trail";
+            case UnlockType::Death: return "death effect";
+            case UnlockType::Swing: return "swing";
+            case UnlockType::Jetpack: return "jetpack";
+            case UnlockType::ShipFire: return "ship fire";
+            default: return "item";
+        }
+    }
+
+    std::string dictString(CCDictionary* dict, char const* key) {
+        if (!dict) return "";
+        auto value = dict->valueForKey(key);
+        return value ? value->getCString() : "";
+    }
 }
 
 PathsOverlay* PathsOverlay::create(float topInset) {
@@ -81,6 +107,11 @@ bool PathsOverlay::init(float topInset) {
 
     buildList();
     buildDetail();
+
+    m_tooltip = CCNode::create();
+    m_tooltip->setVisible(false);
+    body()->addChild(m_tooltip, 10);
+
     refresh(true);
     return true;
 }
@@ -126,15 +157,21 @@ std::string PathsOverlay::signature() const {
 void PathsOverlay::buildList() {
     float k = m_k;
     auto size = bodySize();
-    float y = size.height - 24 * k;
     float h = ROW_HEIGHT * k, w = m_listWidth;
+    // The rows scroll inside the body's height (a phone's is short).
+    float margin = 8 * k;
+    float listTop = size.height - 24 * k;
+    m_list = ScrollArea::create({w + margin * 2, listTop - 16 * k});
+    m_list->setPosition({m_pad - margin, 16 * k});
+    body()->addChild(m_list, 1);
+    float y = 0; // from the top of the content, downwards
     for (int p = 1; p <= PATHS; p++) {
         Row row;
         row.path = p;
         row.node = CCNode::create();
         row.node->setContentSize({w, h});
-        row.node->setPosition({m_pad, y - h});
-        body()->addChild(row.node, 1);
+        row.node->setPosition({margin, -(y + h)});
+        m_list->content()->addChild(row.node, 1);
 
         row.bg = RoundedBox::create({w, h}, 8 * k, m_scheme.background4());
         row.bg->setAnchorPoint({0, 0});
@@ -183,8 +220,9 @@ void PathsOverlay::buildList() {
         row.node->addChild(row.activeTag, 2);
 
         m_rows.push_back(row);
-        y -= h + ROW_GAP * k;
+        y += h + ROW_GAP * k;
     }
+    m_list->setContentHeight(y - ROW_GAP * k + 12 * k);
 }
 
 void PathsOverlay::buildDetail() {
@@ -253,7 +291,9 @@ void PathsOverlay::buildDetail() {
 void PathsOverlay::rebuildCards() {
     for (auto& card : m_cards) card.node->removeFromParent();
     m_cards.clear();
-    m_pressedCard = nullptr;
+    m_tooltipCard = nullptr;
+    m_tooltip->setVisible(false);
+    auto am = AchievementManager::sharedState();
 
     float k = m_k;
     int path = m_selected;
@@ -288,18 +328,29 @@ void PathsOverlay::rebuildCards() {
                 sprite->setScale(52 * k / std::max(s.width, s.height));
                 art = sprite;
             }
+            card.title = "the path's chest";
+            card.description = got ? "claimed" : "waiting at rank 10";
         } else {
             int id = 0;
             UnlockType type = UnlockType::Cube;
-            GameManager::get()->getUnlockForAchievement(fmt::format("geometry.ach.path{:02}.{:02}", path, i), id, type);
+            auto key = fmt::format("geometry.ach.path{:02}.{:02}", path, i);
+            GameManager::get()->getUnlockForAchievement(key, id, type);
+            // GD's achievement for the rank names the reward and says what it takes.
+            auto ach = am->getAchievementsWithID(key.c_str());
+            std::string title = dictString(ach, "title");
+            card.description = dictString(ach, got ? "achievedDescription" : "unachievedDescription");
             if (id > 0) {
                 card.itemID = id;
                 card.itemType = type;
+                card.title = fmt::format("{} {}", unlockName(type), id);
+                if (!title.empty()) card.title += ": " + title;
                 if (auto icon = GJItemIcon::createBrowserItem(type, id)) {
                     auto s = icon->getContentSize();
                     icon->setScale(std::min(52 * k / std::max(s.width, s.height), icon->getScale() * 1.6f));
                     art = icon;
                 }
+            } else {
+                card.title = title;
             }
         }
         if (art) {
@@ -511,8 +562,9 @@ void PathsOverlay::onUpdate(float dt) {
         if (s.width > 0) m_bigIcon->setScale(96 * m_k / std::max(s.width, s.height) * m_iconPop.get());
     }
 
+    bool overList = m_list->containsWorldPoint(mouse) && !m_drag.dragging();
     for (auto& row : m_rows) {
-        bool hovered = interactive && nodeContains(row.node, mouse);
+        bool hovered = interactive && overList && nodeContains(row.node, mouse);
         if (hovered != row.hovered) {
             if (hovered) sfx::hover(sfx::sound::DEFAULT_HOVER);
             row.hovered = hovered;
@@ -520,15 +572,18 @@ void PathsOverlay::onUpdate(float dt) {
             row.bg->setFillColor(selected ? m_scheme.background3() : hovered ? m_scheme.dark4() : m_scheme.background4());
         }
     }
+    Card* hoveredCard = nullptr;
     for (auto& card : m_cards) {
-        bool hovered = interactive && card.itemID > 0 && nodeContains(card.node, mouse);
+        bool hovered = interactive && nodeContains(card.node, mouse);
+        if (hovered) hoveredCard = &card;
         if (hovered != card.hovered) {
             card.hovered = hovered;
-            bool got = card.rank == 0 ? unlocked(m_selected) : rank(m_selected) >= card.rank;
+            bool got = card.rank == RANKS + 1 ? chestClaimed(m_selected) : card.rank == 0 ? unlocked(m_selected) : rank(m_selected) >= card.rank;
             auto base = got ? m_scheme.background3() : m_scheme.background5();
             card.bg->setFillColor(hovered ? theme::lerp(base, {255, 255, 255, 255}, 0.08f) : base);
         }
     }
+    updateTooltip(hoveredCard);
 
     // GD's popups (purchase, reward) change things underneath: keep up.
     m_sinceCheck += dt;
@@ -538,37 +593,80 @@ void PathsOverlay::onUpdate(float dt) {
     }
 }
 
+void PathsOverlay::updateTooltip(Card* hovered) {
+    if (!hovered || hovered->title.empty()) {
+        m_tooltipCard = nullptr;
+        m_tooltip->setVisible(false);
+        return;
+    }
+    float k = m_k;
+    if (hovered != m_tooltipCard) {
+        m_tooltipCard = hovered;
+        m_tooltip->removeAllChildren();
+        // What it is on top, what it takes under it, smaller (the settings' tooltips).
+        float pad = 8 * k, maxW = 300 * k;
+        auto title = makeWrappedText(hovered->title, 15 * k, maxW, theme::CONTENT1);
+        auto titleSize = title->getContentSize();
+        CCNode* body = nullptr;
+        CCSize bodySize {0, 0};
+        if (!hovered->description.empty()) {
+            body = makeWrappedText(hovered->description, 12 * k, maxW, theme::rgb(m_scheme.content2()));
+            bodySize = body->getContentSize();
+        }
+        float w = std::max(titleSize.width, bodySize.width) + pad * 2;
+        float h = titleSize.height + (body ? bodySize.height + 3 * k : 0) + pad * 2;
+        auto box = RoundedBox::create({w, h}, 5 * k, theme::BACKGROUND6);
+        box->setAnchorPoint({0, 1});
+        box->setShadow(6 * k, {0, 0, 0, 90});
+        title->setPosition({pad, h - pad});
+        box->addChild(title);
+        if (body) {
+            body->setPosition({pad, h - pad - titleSize.height - 3 * k});
+            box->addChild(body);
+        }
+        m_tooltip->addChild(box);
+        m_tooltip->setContentSize({w, h});
+    }
+    // Beside the mouse, kept on screen. At once: no delay.
+    auto mouse = body()->convertToNodeSpace(geode::cocos::getMousePos());
+    auto size = bodySize();
+    auto tip = m_tooltip->getContentSize();
+    float x = std::min(mouse.x + 12 * k, size.width - tip.width - 4 * k);
+    float y = std::max(mouse.y - 12 * k, tip.height + 4 * k);
+    m_tooltip->setPosition({x, y});
+    m_tooltip->setVisible(true);
+}
+
 bool PathsOverlay::ccTouchBegan(CCTouch* touch, CCEvent* e) {
     if (!WaveOverlay::ccTouchBegan(touch, e)) return false;
     auto loc = touch->getLocation();
     m_pressedRow = nullptr;
-    m_pressedCard = nullptr;
-    for (auto& row : m_rows) {
-        if (nodeContains(row.node, loc)) m_pressedRow = &row;
-    }
-    for (auto& card : m_cards) {
-        if (card.itemID > 0 && nodeContains(card.node, loc)) m_pressedCard = &card;
+    if (m_list->containsWorldPoint(loc)) {
+        for (auto& row : m_rows) {
+            if (nodeContains(row.node, loc)) m_pressedRow = &row;
+        }
+        m_drag.began(m_list, loc);
     }
     return true;
 }
 
+void PathsOverlay::ccTouchMoved(CCTouch* touch, CCEvent* e) {
+    // A drag on the list scrolls it, and isn't a pick.
+    if (m_drag.moved(touch->getLocation())) {
+        m_pressedRow = nullptr;
+        cancelPress();
+    }
+}
+
 void PathsOverlay::ccTouchEnded(CCTouch* touch, CCEvent* e) {
     WaveOverlay::ccTouchEnded(touch, e);
+    bool dragged = m_drag.ended();
     auto loc = touch->getLocation();
     auto row = m_pressedRow;
-    auto card = m_pressedCard;
     m_pressedRow = nullptr;
-    m_pressedCard = nullptr;
-    if (row && nodeContains(row->node, loc)) {
-        sfx::click(sfx::sound::DEFAULT_SELECT);
-        select(row->path);
-        return;
-    }
-    if (card && nodeContains(card->node, loc)) {
-        // GD's own card for the item: what it is and who made it.
-        sfx::click(sfx::sound::DEFAULT_SELECT);
-        if (auto popup = ItemInfoPopup::create(card->itemID, card->itemType)) popup->show();
-    }
+    if (dragged || !row || !nodeContains(row->node, loc)) return;
+    sfx::click(sfx::sound::DEFAULT_SELECT);
+    select(row->path);
 }
 
 } // namespace lazer

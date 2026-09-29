@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../core/Easing.hpp"
+#include "../core/ScrollArea.hpp"
 #include "WaveOverlay.hpp"
 
 #include <Geode/Geode.hpp>
@@ -26,6 +27,7 @@ public:
     static PathsOverlay* create(float topInset);
 
     bool ccTouchBegan(cocos2d::CCTouch* touch, cocos2d::CCEvent* e) override;
+    void ccTouchMoved(cocos2d::CCTouch* touch, cocos2d::CCEvent* e) override;
     void ccTouchEnded(cocos2d::CCTouch* touch, cocos2d::CCEvent* e) override;
     void didPurchaseItem(GJStoreItem* item) override;
 
@@ -52,6 +54,7 @@ protected:
         RoundedBox* bg = nullptr;
         int itemID = 0;
         UnlockType itemType = UnlockType::Cube;
+        std::string title, description; // what hovering it tells
         bool hovered = false;
     };
 
@@ -66,6 +69,8 @@ protected:
     void refreshDetail();
     void rebuildCards();
     void select(int path);
+    // The hovered card's title and description beside the mouse, at once.
+    void updateTooltip(Card* hovered);
 
     // GD's numbers.
     int points(int path) const;
@@ -86,8 +91,11 @@ protected:
     float m_pad = 0;
     float m_listWidth = 0;
     std::vector<Row> m_rows;
+    ScrollArea* m_list = nullptr;   // the rows scroll when the screen is short
+    ScrollDragger m_drag;
     Row* m_pressedRow = nullptr;
-    Card* m_pressedCard = nullptr;
+    cocos2d::CCNode* m_tooltip = nullptr;
+    Card* m_tooltipCard = nullptr;
     std::string m_signature;
     float m_sinceCheck = 0;
 

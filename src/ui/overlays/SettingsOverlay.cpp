@@ -19,7 +19,7 @@ namespace {
     constexpr float SIDEBAR_EXPANDED_WIDTH = 170.f;
     constexpr float CONTENT_MARGINS = 20.f;
     constexpr float DIM_ALPHA = 0.45f;
-    constexpr float TOOLTIP_DELAY = 0.45f;
+    constexpr float TOOLTIP_DELAY = 0.f; // straight away: no waiting to learn what a row does
 
     GLubyte toByte(float a) { return static_cast<GLubyte>(std::clamp(a, 0.f, 1.f) * 255.f); }
 
