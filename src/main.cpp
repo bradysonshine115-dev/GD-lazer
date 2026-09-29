@@ -25,6 +25,7 @@
 #include "ui/overlays/Dialog.hpp"
 #include "ui/overlays/LevelListingOverlay.hpp"
 #include "ui/overlays/QuestsOverlay.hpp"
+#include "ui/overlays/LeaderboardsOverlay.hpp"
 #include "ui/overlays/RewardsPopup.hpp"
 #include "ui/overlays/SettingsOverlay.hpp"
 #include "ui/overlays/StatsOverlay.hpp"
@@ -317,6 +318,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         lazer::MenuBackground* background = nullptr;
         lazer::SettingsOverlay* settings = nullptr;
         lazer::QuestsOverlay* quests = nullptr;
+        lazer::LeaderboardsOverlay* leaderboards = nullptr;
         lazer::AchievementsOverlay* achievements = nullptr;
         lazer::StatsOverlay* stats = nullptr;
         lazer::NowPlayingOverlay* nowPlaying = nullptr;
@@ -595,7 +597,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
                 creatorAction(handler);
             };
         };
-        toolbar->addRight({lazer::makeIcon(icon::RANKING_STAR, 1), "leaderboards", hub(&CreatorLayer::onLeaderboards)});
+        toolbar->addRight({lazer::makeIcon(icon::RANKING_STAR, 1), "leaderboards", [this] { this->toggleLeaderboards(); }});
         toolbar->addRight({lazer::makeIcon(icon::LIST_CHECK, 1), "quests", [this] { this->toggleQuests(); }});
         toolbar->addRight({lazer::makeIcon(icon::ROUTE, 1), "paths", hub(&CreatorLayer::onPaths)});
         toolbar->addRight({lazer::makeIcon(icon::CALENDAR_WEEK, 1), "weekly demon", hub(&CreatorLayer::onWeeklyLevel)});
@@ -668,6 +670,21 @@ class $modify(LazerMenuLayer, MenuLayer) {
         lazer::showRewards();
     }
 
+    void toggleLeaderboards() {
+        auto& leaderboards = m_fields->leaderboards;
+        if (!leaderboards) {
+            leaderboards = lazer::LeaderboardsOverlay::create(m_fields->toolbar ? m_fields->toolbar->height() : 0);
+            leaderboards->setID("leaderboards"_spr);
+            this->addChild(leaderboards, 16);
+        }
+        if (leaderboards->isOpen()) {
+            leaderboards->close();
+        } else {
+            closeOverlaysExcept(leaderboards);
+            leaderboards->open();
+        }
+    }
+
     void toggleQuests() {
         auto& quests = m_fields->quests;
         if (!quests) {
@@ -718,6 +735,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         auto& f = m_fields;
         if (f->settings && f->settings != keep) f->settings->close();
         if (f->quests && f->quests != keep) f->quests->close();
+        if (f->leaderboards && f->leaderboards != keep) f->leaderboards->close();
         if (f->achievements && f->achievements != keep) f->achievements->close();
         if (f->stats && f->stats != keep) f->stats->close();
     }
@@ -734,6 +752,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         };
         closeIf(f->settings);
         closeIf(f->quests);
+        closeIf(f->leaderboards);
         closeIf(f->achievements);
         closeIf(f->stats);
         closeIf(f->nowPlaying);
@@ -786,6 +805,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         if (m_fields->account && m_fields->account->back()) return true;
         if (m_fields->settings && m_fields->settings->back()) return true;
         if (m_fields->quests && m_fields->quests->back()) return true;
+        if (m_fields->leaderboards && m_fields->leaderboards->back()) return true;
         if (m_fields->achievements && m_fields->achievements->back()) return true;
         if (m_fields->stats && m_fields->stats->back()) return true;
         if (m_fields->buttons && m_fields->buttons->back()) return true;
