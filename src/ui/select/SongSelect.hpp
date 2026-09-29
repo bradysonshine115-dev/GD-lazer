@@ -276,9 +276,6 @@ protected:
     Tweened<float> m_downloadProgress {0.f};
     LevelLoad m_levelLoad = LevelLoad::Waiting;
     geode::Ref<cocos2d::CCScene> m_levelScene;
-    // What PlayLayer::init told GameManager, held back until the push.
-    PlayLayer* m_levelPlayLayer = nullptr;
-    GJBaseGameLayer* m_levelGameLayer = nullptr;
     // Song select's music (the preview) that building the level left alone:
     // faded and stopped at the push.
     std::vector<Music> m_selectMusic;
