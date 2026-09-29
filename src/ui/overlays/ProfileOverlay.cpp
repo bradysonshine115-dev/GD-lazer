@@ -3,6 +3,7 @@
 #include "../../audio/Sfx.hpp"
 #include "../../integrations/ModIntegrations.hpp"
 #include "../core/Text.hpp"
+#include "../core/Triangles.hpp"
 
 #include <Geode/modify/ProfilePage.hpp>
 #include <Geode/utils/web.hpp>
@@ -292,6 +293,14 @@ float ProfileOverlay::buildHeader(float y) {
     cover->setContentSize({W, coverH});
     cover->setPosition({0, -(y + coverH)});
     content->addChild(cover);
+    // Triangles in their second colour drift up through the cover.
+    auto triangles = Triangles::create({W, coverH}, 90 * k, std::max(12, int(W / (60 * k))));
+    triangles->setColor(c2);
+    triangles->setAlphaRange(0.05f, 0.16f);
+    triangles->setVelocity(0.25f);
+    triangles->setClipped(true);
+    triangles->setPosition({0, -(y + coverH)});
+    content->addChild(triangles);
     auto shade = CCLayerGradient::create({0, 0, 0, 0}, {0, 0, 0, 150}, {0, -1});
     shade->setContentSize({W, coverH});
     shade->setPosition({0, -(y + coverH)});

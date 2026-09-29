@@ -2,6 +2,7 @@
 
 #include "../../audio/Sfx.hpp"
 #include "../core/Text.hpp"
+#include "../core/Triangles.hpp"
 #include "../core/Theme.hpp"
 
 #include <Geode/Geode.hpp>
@@ -68,6 +69,19 @@ bool WaveOverlay::init(float topInset, theme::Scheme scheme, char const* icon,
     headerBg->setContentSize({win.width, headerH});
     headerBg->setPosition({0, m_height - headerH});
     m_content->addChild(headerBg, 0);
+    // The header's own life: a wash of the scheme's colour to the right and
+    // osu!'s triangles drifting up through it (kept inside the band).
+    auto wash = CCLayerGradient::create({0, 0, 0, 0}, scheme.get(0.35f, 0.22f), {1, -0.35f});
+    wash->setContentSize({win.width, headerH});
+    wash->setPosition({0, m_height - headerH});
+    m_content->addChild(wash, 0);
+    auto triangles = Triangles::create({win.width, headerH}, 90 * m_k, std::max(12, int(win.width / (60 * m_k))));
+    triangles->setColor(theme::rgb(scheme.light1()));
+    triangles->setAlphaRange(0.03f, 0.10f);
+    triangles->setVelocity(0.25f);
+    triangles->setClipped(true);
+    triangles->setPosition({0, m_height - headerH});
+    m_content->addChild(triangles, 1);
 
     // A thin accent line under the header.
     auto accent = CCLayerColor::create(scheme.highlight1());

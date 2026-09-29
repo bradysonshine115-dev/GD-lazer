@@ -15,8 +15,12 @@ public:
     void setVelocity(float v) { m_velocity = v; }
     // Per-triangle alpha range; each triangle picks a shade in between.
     void setAlphaRange(float min, float max) { m_alphaMin = min; m_alphaMax = max; }
+    // Keeps the triangles inside the node's rectangle (they enter from below
+    // its bottom edge and leave over its top): for a band, not a whole screen.
+    void setClipped(bool clipped) { m_clipped = clipped; }
 
     void update(float dt) override;
+    void visit() override;
     void draw() override;
 
 protected:
@@ -33,6 +37,7 @@ protected:
     float m_velocity = 1;
     float m_alphaMin = 0.02f;
     float m_alphaMax = 0.08f;
+    bool m_clipped = false;
     std::vector<Particle> m_particles;
     std::mt19937 m_rng {std::random_device{}()};
 

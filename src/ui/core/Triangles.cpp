@@ -59,6 +59,36 @@ void Triangles::update(float dt) {
     }
 }
 
+void Triangles::visit() {
+    if (!m_clipped || !this->isVisible()) return CCNodeRGBA::visit();
+
+    // Clip to our rectangle, within whatever clip is already on (a scroll area's).
+    auto view = CCEGLView::sharedOpenGLView();
+    auto size = this->getContentSize();
+    auto bl = this->convertToWorldSpace({0, 0});
+    auto tr = this->convertToWorldSpace({size.width, size.height});
+    auto port = view->getViewPortRect();
+    float x0 = bl.x * view->getScaleX() + port.origin.x, y0 = bl.y * view->getScaleY() + port.origin.y;
+    float x1 = tr.x * view->getScaleX() + port.origin.x, y1 = tr.y * view->getScaleY() + port.origin.y;
+
+    bool wasEnabled = glIsEnabled(GL_SCISSOR_TEST);
+    GLint prev[4];
+    glGetIntegerv(GL_SCISSOR_BOX, prev);
+    if (wasEnabled) {
+        x0 = std::max(x0, float(prev[0]));
+        y0 = std::max(y0, float(prev[1]));
+        x1 = std::min(x1, float(prev[0] + prev[2]));
+        y1 = std::min(y1, float(prev[1] + prev[3]));
+    }
+    if (x1 <= x0 || y1 <= y0) return;
+
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(GLint(x0), GLint(y0), GLsizei(x1 - x0), GLsizei(y1 - y0));
+    CCNodeRGBA::visit();
+    if (wasEnabled) glScissor(prev[0], prev[1], prev[2], prev[3]);
+    else glDisable(GL_SCISSOR_TEST);
+}
+
 void Triangles::draw() {
     auto tint = this->getDisplayedColor();
     float opacity = this->getDisplayedOpacity() / 255.f;
