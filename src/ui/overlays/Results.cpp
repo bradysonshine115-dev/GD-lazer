@@ -193,6 +193,12 @@ namespace {
                 child->setVisible(false);
                 continue;
             }
+            // GD's "level complete" / "practice complete" title sits on the
+            // panel like the coins, but the card has its own.
+            if (isSpriteFrameName(child, "GJ_levelComplete_001.png") || isSpriteFrameName(child, "GJ_practiceComplete_001.png")) {
+                child->setVisible(false);
+                continue;
+            }
             if (!child->isVisible()) continue;
             auto box = rectIn(child, m_main);
             // The chains hanging the panel are outside it; coins are on it.
