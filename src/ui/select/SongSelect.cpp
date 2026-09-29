@@ -12,6 +12,7 @@
 
 #include <Geode/modify/GameManager.hpp>
 #include <Geode/modify/LevelInfoLayer.hpp>
+#include <Geode/modify/PlayLayer.hpp>
 #include <Geode/utils/base64.hpp>
 #include <algorithm>
 #include <cmath>
@@ -1031,13 +1032,6 @@ void SongSelect::updateLoader(float dt) {
                     if (std::ranges::any_of(playing, [&](Music const& p) { return p == m; })) engine->stopAndRemoveMusic(m.id);
                 }
                 m_selectMusic.clear();
-                // GameManager learns about the level as it's entered, as when
-                // GD builds it right before its own transition.
-                auto gm = GameManager::get();
-                gm->m_playLayer = m_levelPlayLayer;
-                gm->m_gameLayer = m_levelGameLayer;
-                m_levelPlayLayer = nullptr;
-                m_levelGameLayer = nullptr;
                 auto transition = CCTransitionFade::create(0.4f, m_levelScene);
                 m_levelScene = nullptr;
                 m_levelLoad = LevelLoad::Waiting;
@@ -1096,27 +1090,18 @@ void SongSelect::updateLoader(float dt) {
 // stalls, but it does so while the loader is up (osu! shows a spinner there
 // too), and the push afterwards is only the transition.
 void SongSelect::loadLevel() {
-    auto gm = GameManager::get();
-    auto playLayer = gm->m_playLayer;
-    auto gameLayer = gm->m_gameLayer;
     auto before = currentMusic();
 
     // Mods hooking PlayLayer::init run now too, not at the push.
     m_levelScene = PlayLayer::scene(m_loaderLevel, false, false);
     m_levelLoad = LevelLoad::Loaded;
 
-    // PlayLayer::init makes itself GameManager's current level (PlayLayer::get()).
-    // Nobody is playing it yet: song select is what's on screen until the push,
-    // so hold that back until then. GD pausing the level when the game loses
-    // focus, and mods asking whether a level is being played, find none; and
-    // after a cancel nothing is left pointing at a level that's gone. Its
-    // updates and actions don't run before it's entered (cocos pauses them for
-    // a node that isn't running), and it registers for touches and keys only
-    // when it's entered (onEnter).
-    m_levelPlayLayer = gm->m_playLayer;
-    m_levelGameLayer = gm->m_gameLayer;
-    gm->m_playLayer = playLayer;
-    gm->m_gameLayer = gameLayer;
+    // PlayLayer::init makes itself GameManager's current level (PlayLayer::get()),
+    // and that stays: mods queue work from init that asks for it on the next
+    // frame (Custom Keybinds does, and crashed on a null level). GD pausing it
+    // when the game loses focus is stopped below until it's entered. Its updates
+    // and actions don't run before then (cocos pauses them for a node that isn't
+    // running), and it registers for touches and keys only in onEnter.
 
     // The preview plays on until the fade. Building the level may have set up
     // its own music already: only what was playing before and is untouched is
@@ -1139,13 +1124,11 @@ void SongSelect::loadLevel() {
 // does to any scene it drops is cleanup() then release: cleanup stops the
 // actions and schedules the level (and mods) set up in init, which would keep
 // it alive, and the release destroys it (PlayLayer's destructor). GameManager
-// hasn't pointed at it since it was built (see loadLevel); make sure anyway.
+// still points at it: drop that.
 // The preview never stopped, so nothing of the music needs undoing.
 void SongSelect::dropLevel() {
     m_levelLoad = LevelLoad::Waiting;
     m_selectMusic.clear();
-    m_levelPlayLayer = nullptr;
-    m_levelGameLayer = nullptr;
     if (!m_levelScene) return;
     if (auto layer = m_levelScene->getChildByType<PlayLayer>(0)) {
         auto gm = GameManager::get();
@@ -2460,4 +2443,14 @@ class $modify(SongSelectLevelPage, LevelInfoLayer) {
         LevelInfoLayer::keyBackClicked();
     }
 #endif
+};
+
+// A level built behind song select's loader isn't on screen until the push:
+// GD pausing it when the game loses focus would put its pause menu over song
+// select. Once it's entered, pausing is GD's as usual.
+class $modify(SongSelectPreloadedLevel, PlayLayer) {
+    void pauseGame(bool unfocused) {
+        if (!this->isRunning()) return;
+        PlayLayer::pauseGame(unfocused);
+    }
 };
