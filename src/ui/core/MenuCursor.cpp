@@ -17,10 +17,17 @@
 
 #include "../../audio/Sfx.hpp"
 #include "Easing.hpp"
+#include "RoundedBox.hpp"
+#include "Text.hpp"
+#include "Theme.hpp"
 
 #include <Windows.h>
 
+#include <algorithm>
+#include <array>
 #include <cmath>
+#include <string>
+#include <vector>
 
 using namespace geode::prelude;
 
@@ -54,6 +61,99 @@ namespace {
 
     enum class Drag { None, Started, Rotating };
 
+    // Shaking it left and right gets it talking, more each time you keep going.
+    constexpr std::array<char const*, 10> NAGS {{
+        "hey, stop!",
+        "i said stop",
+        "that's not funny",
+        "i'm getting dizzy...",
+        "ok, you're doing it on purpose",
+        "i'm not a toy!",
+        "you know what, fine",
+        "...are you done?",
+        "i'm telling the logo about this",
+        "that's it. i'm out.",
+    }};
+    // And spinning it round until it has to spin all the way back.
+    constexpr std::array<char const*, 3> DIZZY {{
+        "woah, don't do it again",
+        "i mean it. no more spinning",
+        "...i think i'm gonna be sick",
+    }};
+    constexpr float SHAKE_SPEED = 450.f;    // px/s, a swing has to be at least this fast
+    constexpr float SHAKE_TRAVEL = 40.f;    // px, and this long
+    constexpr int SHAKE_TURNS = 6;          // direction changes within a second
+    constexpr float DIZZY_TURN = 300.f;     // degrees wound up at release
+    constexpr float DIZZY_S = 1.3f;         // how long the wobble lasts
+
+    // A little speech bubble beside the cursor: pops in, fades after a while.
+    class Bubble : public CCNode {
+    public:
+        static Bubble* create() {
+            auto ret = new Bubble();
+            if (ret->init()) {
+                ret->autorelease();
+                return ret;
+            }
+            delete ret;
+            return nullptr;
+        }
+
+        bool init() override {
+            if (!CCNode::init()) return false;
+            float k = unitScale();
+            m_bg = RoundedBox::create({10, 10}, 8 * k, {0x22, 0x1a, 0x21, 235});
+            m_bg->setAnchorPoint({0, 0});
+            this->addChild(m_bg);
+            m_label = makeText(" ", Weight::SemiBold, 13 * k);
+            m_label->setAnchorPoint({0, 0.5f});
+            this->addChild(m_label, 1);
+            this->setVisible(false);
+            return true;
+        }
+
+        void say(std::string const& text) {
+            float k = unitScale();
+            m_label->setString(text.c_str());
+            auto size = m_label->getScaledContentSize();
+            float padX = 9 * k, padY = 5 * k;
+            CCSize box {size.width + padX * 2, size.height + padY * 2};
+            m_bg->setContentSize(box);
+            m_bg->setRadius(std::min(8 * k, box.height / 2));
+            m_label->setPosition({padX, box.height / 2});
+            this->setContentSize(box);
+            this->setAnchorPoint({0, 0});
+            this->setVisible(true);
+            m_scale.set(0.6f);
+            m_scale.to(1, 500, Easing::OutElasticHalf);
+            m_alpha.to(1, 150, Easing::OutQuint);
+            m_left = 2.2f + text.size() * 0.03f;
+        }
+
+        void tick(float dt) {
+            if (!this->isVisible()) return;
+            m_left -= dt;
+            if (m_left <= 0 && m_alpha.target() > 0) {
+                m_alpha.to(0, 300, Easing::OutQuint);
+                m_scale.to(0.8f, 300, Easing::OutQuint);
+            }
+            m_alpha.update(dt);
+            m_scale.update(dt);
+            float a = std::clamp(m_alpha.get(), 0.f, 1.f);
+            this->setScale(m_scale.get());
+            m_bg->setFillColor({0x22, 0x1a, 0x21, GLubyte(235 * a)});
+            m_label->setOpacity(GLubyte(255 * a));
+            if (m_left <= 0 && a <= 0.001f) this->setVisible(false);
+        }
+
+    private:
+        RoundedBox* m_bg = nullptr;
+        CCLabelBMFont* m_label = nullptr;
+        Tweened<float> m_alpha {0.f};
+        Tweened<float> m_scale {1.f};
+        float m_left = 0;
+    };
+
     class MenuCursor : public CCNode {
     public:
         static MenuCursor* create() {
@@ -78,6 +178,13 @@ namespace {
             m_additive->setOpacity(0);
             m_additive->setBlendFunc({GL_ONE, GL_ONE}); // additive (the texture is premultiplied)
             m_holder->addChild(m_additive);
+            // Up and to the right of the tip (the arrow hangs below it).
+            m_bubble = Bubble::create();
+            if (m_bubble) {
+                float k = unitScale();
+                m_bubble->setPosition({12 * k, 10 * k});
+                this->addChild(m_bubble, 1);
+            }
             return true;
         }
 
@@ -147,9 +254,11 @@ namespace {
             // Tilt while moving (ours, not osu!'s): the arrow hangs from its tip and
             // its body swings back against the motion, more the faster it goes.
             // Stiffer than the drag rotation, and off while that's turning it.
+            m_time += dt;
             if (m_hasPos && ms > 0 && inside) {
                 CCPoint v = (pos - m_lastPos) * pxPerPoint / dt; // px/s, y up
                 m_velocity = CCPoint(damp(m_velocity.x, v.x, 0.9, ms), damp(m_velocity.y, v.y, 0.9, ms));
+                watchShaking((pos.x - m_lastPos.x) * pxPerPoint);
             }
             float tiltTarget = 0;
             bool tilting = Mod::get()->getSettingValue<bool>("cursor-rotation") && m_drag != Drag::Rotating && m_visible;
@@ -165,6 +274,25 @@ namespace {
             m_tilt = damp(m_tilt, tiltTarget, 0.97, ms);
 
             for (auto t : {&m_alpha, &m_scale, &m_press, &m_rotation, &m_glow}) t->update(dt);
+            if (m_bubble) m_bubble->tick(dt);
+
+            // Dizzy: once it has spun back, it shivers for a moment.
+            float wobble = 0;
+            CCPoint jitter;
+            if (m_dizzyAt >= 0 && m_time >= m_dizzyAt) {
+                float t = m_time - m_dizzyAt;
+                if (t >= DIZZY_S) {
+                    m_dizzyAt = -1;
+                } else {
+                    if (!m_dizzySaid) {
+                        m_dizzySaid = true;
+                        if (m_bubble) m_bubble->say(DIZZY[std::min<int>(m_dizzyCount - 1, DIZZY.size() - 1)]);
+                    }
+                    float fade = (1 - t / DIZZY_S) * (1 - t / DIZZY_S);
+                    wobble = 9.f * fade * std::sin(t * 2 * float(M_PI) * 13);
+                    jitter = CCPoint(1.6f * fade * std::sin(t * 2 * float(M_PI) * 17), 1.2f * fade * std::cos(t * 2 * float(M_PI) * 11)) / pxPerPoint;
+                }
+            }
 
             this->setPosition(pos);
             m_lastPos = pos;
@@ -173,7 +301,8 @@ namespace {
             // osu! draws it in screen pixels: texture pixels x base scale x size.
             float scale = BASE_SCALE * size * CC_CONTENT_SCALE_FACTOR() / pxPerPoint;
             m_holder->setScale(scale * m_scale.get() * m_press.get());
-            m_holder->setRotation(m_rotation.get() + m_tilt);
+            m_holder->setRotation(m_rotation.get() + m_tilt + wobble);
+            m_holder->setPosition(jitter);
             auto alpha = static_cast<GLubyte>(std::clamp(m_alpha.get(), 0.f, 1.f) * 255);
             m_base->setOpacity(alpha);
             m_additive->setOpacity(static_cast<GLubyte>(std::clamp(m_glow.get() * m_alpha.get(), 0.f, 1.f) * 255));
@@ -201,10 +330,42 @@ namespace {
             m_press.to(1, 500, Easing::OutElastic);
             if (m_drag != Drag::None) {
                 float r = m_rotation.get();
-                m_rotation.to(0, 400 * (0.5f + std::abs(r / 960)), Easing::OutElasticQuarter);
+                float springMs = 400 * (0.5f + std::abs(r / 960));
+                m_rotation.to(0, springMs, Easing::OutElasticQuarter);
                 m_drag = Drag::None;
+                // Wound up so far it has to spin all the way back: dizzy once it's there.
+                if (std::abs(r) >= DIZZY_TURN) {
+                    if (m_time - m_lastDizzy > 30) m_dizzyCount = 0;
+                    m_dizzyCount++;
+                    m_lastDizzy = m_time;
+                    m_dizzyAt = m_time + springMs / 1000.f * 0.6f;
+                    m_dizzySaid = false;
+                }
             }
             if (m_visible) sfx::play(sfx::sound::CURSOR_TAP, 0.01f, 0.8f);
+        }
+
+        // Fast left-right-left swings: a direction change counts when the
+        // swing before it was quick and long enough.
+        void watchShaking(float dx) {
+            int dir = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+            if (dir != 0) {
+                if (dir == m_shakeDir) {
+                    m_shakeTravel += std::abs(dx);
+                } else {
+                    if (m_shakeTravel >= SHAKE_TRAVEL && std::abs(m_velocity.x) >= SHAKE_SPEED) m_reversals.push_back(m_time);
+                    m_shakeDir = dir;
+                    m_shakeTravel = std::abs(dx);
+                }
+            }
+            while (!m_reversals.empty() && m_reversals.front() < m_time - 1.f) m_reversals.erase(m_reversals.begin());
+            if (m_reversals.size() < size_t(SHAKE_TURNS) || m_time - m_lastNag < 1.5f) return;
+            m_reversals.clear();
+            // Left alone for a while, it forgets.
+            if (m_time - m_lastNag > 8) m_nagLevel = 0;
+            if (m_bubble) m_bubble->say(NAGS[std::min<int>(m_nagLevel, NAGS.size() - 1)]);
+            m_nagLevel++;
+            m_lastNag = m_time;
         }
 
         void onMove(CCPoint px) {
@@ -239,6 +400,18 @@ namespace {
         bool m_hasPos = false;
         CCPoint m_velocity;
         float m_tilt = 0;
+
+        Bubble* m_bubble = nullptr;
+        float m_time = 0;
+        int m_shakeDir = 0;
+        float m_shakeTravel = 0;
+        std::vector<float> m_reversals;
+        int m_nagLevel = 0;
+        float m_lastNag = -100;
+        float m_dizzyAt = -1;
+        bool m_dizzySaid = false;
+        int m_dizzyCount = 0;
+        float m_lastDizzy = -100;
     };
 
     // Not in the scene graph: visited by hand in swapBuffers. Kept for the
