@@ -701,6 +701,12 @@ float CommentsOverlay::buildComment(GJComment* comment, float y) {
     float k = m_k, W = bodySize().width;
     auto glm = GameLevelManager::sharedState();
     auto content = m_list;
+    // Like GD's CommentCell: the author's name is in their user score, and a
+    // missing account ID comes from the user IDs GD has seen (kept on the comment).
+    std::string author = comment->m_userScore ? std::string(comment->m_userScore->m_userName) : "";
+    if (author.empty()) author = glm->userNameForUserID(comment->m_userID);
+    if (comment->m_accountID <= 0 && comment->m_userScore) comment->m_accountID = comment->m_userScore->m_accountID;
+    if (comment->m_accountID <= 0) comment->m_accountID = glm->accountIDForUserID(comment->m_userID);
     int me = GJAccountManager::get()->m_accountID;
     bool own = me > 0 && comment->m_accountID == me;
     bool hidden = comment->m_isSpam || comment->m_commentDeleted;
@@ -725,7 +731,7 @@ float CommentsOverlay::buildComment(GJComment* comment, float y) {
     float textW = W - m_pad - textX;
     float lineCy = -(y + 8 * k);
     float x = textX;
-    auto name = makeText(comment->m_userName, Weight::Bold, 14 * k);
+    auto name = makeText(author, Weight::Bold, 14 * k);
     name->setAnchorPoint({0, 0.5f});
     name->setPosition({x, lineCy});
     float nameW = name->getScaledContentSize().width;
