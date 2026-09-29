@@ -26,6 +26,7 @@
 #include "ui/overlays/LevelListingOverlay.hpp"
 #include "ui/overlays/QuestsOverlay.hpp"
 #include "ui/overlays/LeaderboardsOverlay.hpp"
+#include "ui/overlays/PathsOverlay.hpp"
 #include "ui/overlays/RewardsPopup.hpp"
 #include "ui/overlays/SettingsOverlay.hpp"
 #include "ui/overlays/StatsOverlay.hpp"
@@ -319,6 +320,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         lazer::SettingsOverlay* settings = nullptr;
         lazer::QuestsOverlay* quests = nullptr;
         lazer::LeaderboardsOverlay* leaderboards = nullptr;
+        lazer::PathsOverlay* paths = nullptr;
         lazer::AchievementsOverlay* achievements = nullptr;
         lazer::StatsOverlay* stats = nullptr;
         lazer::NowPlayingOverlay* nowPlaying = nullptr;
@@ -599,7 +601,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         };
         toolbar->addRight({lazer::makeIcon(icon::RANKING_STAR, 1), "leaderboards", [this] { this->toggleLeaderboards(); }});
         toolbar->addRight({lazer::makeIcon(icon::LIST_CHECK, 1), "quests", [this] { this->toggleQuests(); }});
-        toolbar->addRight({lazer::makeIcon(icon::ROUTE, 1), "paths", hub(&CreatorLayer::onPaths)});
+        toolbar->addRight({lazer::makeIcon(icon::ROUTE, 1), "paths", [this] { this->togglePaths(); }});
         toolbar->addRight({lazer::makeIcon(icon::CALENDAR_WEEK, 1), "weekly demon", hub(&CreatorLayer::onWeeklyLevel)});
         toolbar->addRight({lazer::makeIcon(icon::BOLT, 1), "event level", hub(&CreatorLayer::onEventLevel)});
         toolbar->addRight({lazer::makeIcon(icon::VAULT, 1), "vault", hub(&CreatorLayer::onSecretVault)});
@@ -685,6 +687,21 @@ class $modify(LazerMenuLayer, MenuLayer) {
         }
     }
 
+    void togglePaths() {
+        auto& paths = m_fields->paths;
+        if (!paths) {
+            paths = lazer::PathsOverlay::create(m_fields->toolbar ? m_fields->toolbar->height() : 0);
+            paths->setID("paths"_spr);
+            this->addChild(paths, 16);
+        }
+        if (paths->isOpen()) {
+            paths->close();
+        } else {
+            closeOverlaysExcept(paths);
+            paths->open();
+        }
+    }
+
     void toggleQuests() {
         auto& quests = m_fields->quests;
         if (!quests) {
@@ -736,6 +753,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         if (f->settings && f->settings != keep) f->settings->close();
         if (f->quests && f->quests != keep) f->quests->close();
         if (f->leaderboards && f->leaderboards != keep) f->leaderboards->close();
+        if (f->paths && f->paths != keep) f->paths->close();
         if (f->achievements && f->achievements != keep) f->achievements->close();
         if (f->stats && f->stats != keep) f->stats->close();
     }
@@ -753,6 +771,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         closeIf(f->settings);
         closeIf(f->quests);
         closeIf(f->leaderboards);
+        closeIf(f->paths);
         closeIf(f->achievements);
         closeIf(f->stats);
         closeIf(f->nowPlaying);
@@ -806,6 +825,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         if (m_fields->settings && m_fields->settings->back()) return true;
         if (m_fields->quests && m_fields->quests->back()) return true;
         if (m_fields->leaderboards && m_fields->leaderboards->back()) return true;
+        if (m_fields->paths && m_fields->paths->back()) return true;
         if (m_fields->achievements && m_fields->achievements->back()) return true;
         if (m_fields->stats && m_fields->stats->back()) return true;
         if (m_fields->buttons && m_fields->buttons->back()) return true;
