@@ -37,7 +37,8 @@ class $modify(LazerPauseLayer, PauseLayer) {
     }
 
     void tryQuit(CCObject* sender) {
-        if (!Mod::get()->getSettingValue<bool>("enabled") || !GameManager::get()->getGameVariable(CONFIRM_EXIT)) {
+        if (!Mod::get()->getSettingValue<bool>("enabled") || !Mod::get()->getSettingValue<bool>("restyle-gameplay")
+            || !GameManager::get()->getGameVariable(CONFIRM_EXIT)) {
             return PauseLayer::tryQuit(sender);
         }
         if (lazer::Dialog::isOpen()) return;

@@ -90,6 +90,36 @@ protected:
 // An icon and a label side by side, for AnimatedButtonItem.
 cocos2d::CCNode* iconLabel(char const* glyph, std::string const& text, float size);
 
+// A round button with a glyph in the middle (GD's practice / play / retry).
+AnimatedButtonItem* roundButton(char const* glyph, float size, cocos2d::ccColor4B colour, std::function<void()> action);
+
+// A pill with an icon and a label (the footers' buttons).
+AnimatedButtonItem* pillButton(char const* glyph, std::string const& label, float height, float k,
+                               cocos2d::ccColor4B colour, std::function<void()> action);
+
+// osu!'s title Spacing: letters pushed apart by `spacing` (GD units).
+void spaceLetters(cocos2d::CCLabelBMFont* label, float spacing);
+
+// Lays a row of buttons out centred at `y`, shrunk to fit `maxWidth`.
+// `gaps` are the spaces after each button (the last is ignored).
+void layoutRow(std::vector<AnimatedButtonItem*> const& row, std::vector<float> const& gaps, float y, float centreX, float maxWidth);
+
+// The gameplay screens' shared colours (OsuColour).
+namespace gameplay {
+    constexpr cocos2d::ccColor4B YELLOW {0xff, 0xcc, 0x22, 255};
+    constexpr cocos2d::ccColor4B YELLOW_DARK {0xee, 0xaa, 0x00, 255};
+    constexpr cocos2d::ccColor4B GREEN {0x88, 0xb3, 0x00, 255};
+    constexpr cocos2d::ccColor4B BLUE {0x44, 0xaa, 0xdd, 255};
+    constexpr cocos2d::ccColor4B BLUE_LIGHT {0x66, 0xcc, 0xff, 255};
+    constexpr cocos2d::ccColor4B QUIT_RED {170, 27, 39, 255};
+    constexpr cocos2d::ccColor4B GRAY4 {0x44, 0x44, 0x44, 255};
+    constexpr cocos2d::ccColor4B GRAY5 {0x55, 0x55, 0x55, 255};
+    constexpr float BACKGROUND_ALPHA = 0.75f;
+    constexpr float TITLE_SIZE = 40, TITLE_SPACING = 5, INFO_SIZE = 16, TOP_MARGIN = 28;
+    constexpr float PLAY_SIZE = 104, SIDE_SIZE = 68, MIDDLE_GAP = 44, CAPTION_SIZE = 14, CAPTION_GAP = 10;
+    constexpr float FOOTER_HEIGHT = 36, FOOTER_GAP = 8, FOOTER_MARGIN = 22;
+}
+
 // Buttons other mods added to one of GD's menus: their handler lives outside
 // GD's binary (or they run a Geode callback and carry a mod's ID).
 bool isModButton(cocos2d::CCMenuItem* item);

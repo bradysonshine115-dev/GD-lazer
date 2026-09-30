@@ -336,6 +336,51 @@ CCNode* iconLabel(char const* glyph, std::string const& text, float size) {
     return node;
 }
 
+AnimatedButtonItem* roundButton(char const* glyph, float size, ccColor4B colour, std::function<void()> action) {
+    auto icon = makeIcon(glyph, size * 0.42f);
+    anchorOnGlyph(icon);
+    icon->setPosition({0, 0});
+    return AnimatedButtonItem::create({size, size}, size / 2, colour, icon, std::move(action));
+}
+
+AnimatedButtonItem* pillButton(char const* glyph, std::string const& label, float height, float k,
+                               ccColor4B colour, std::function<void()> action) {
+    auto content = iconLabel(glyph, label, 15 * k);
+    float w = content->getContentSize().width + 28 * k;
+    return AnimatedButtonItem::create({w, height}, 10 * k, colour, content, std::move(action));
+}
+
+void spaceLetters(CCLabelBMFont* label, float spacing) {
+    float scale = label->getScaleX();
+    if (scale <= 0) return;
+    float local = spacing / scale;
+    int i = 0;
+    for (auto letter : CCArrayExt<CCNode*>(label->getChildren())) {
+        letter->setPositionX(letter->getPositionX() + local * i);
+        i++;
+    }
+    if (i > 1) {
+        auto size = label->getContentSize();
+        label->setContentSize({size.width + local * (i - 1), size.height});
+    }
+}
+
+void layoutRow(std::vector<AnimatedButtonItem*> const& row, std::vector<float> const& gaps, float y, float centreX, float maxWidth) {
+    float total = 0;
+    for (size_t i = 0; i < row.size(); i++) {
+        total += row[i]->getContentSize().width;
+        if (i + 1 < row.size()) total += gaps[i];
+    }
+    float scale = total > maxWidth && total > 0 ? maxWidth / total : 1.f;
+    float x = centreX - total * scale / 2;
+    for (size_t i = 0; i < row.size(); i++) {
+        float w = row[i]->getContentSize().width * scale;
+        row[i]->setScale(scale);
+        row[i]->setPosition({x + w / 2, y});
+        x += w + (i + 1 < row.size() ? gaps[i] * scale : 0);
+    }
+}
+
 bool isModButton(CCMenuItem* item) {
     auto selector = item->m_pfnSelector;
     if (!selector) {
