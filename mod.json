@@ -152,8 +152,8 @@
 		"restyle-gameplay": {
 			"type": "bool",
 			"name": "Lazer pause and results",
-			"description": "Show the pause menu and the level complete screen the osu! way. GD's options and other mods' pause buttons stay reachable from them.",
-			"default": true
+			"description": "Show the pause menu and the level complete screen the osu! way. GD's options and other mods' pause buttons stay reachable from them. Off by default: GD's own screens stay.",
+			"default": false
 		},
 		"restyle-profiles": {
 			"type": "bool",

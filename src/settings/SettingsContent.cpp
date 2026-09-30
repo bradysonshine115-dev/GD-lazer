@@ -224,6 +224,19 @@ void buildSettings(SettingsOverlay* overlay, MenuLayer* menu, MenuBackground* ba
     blockedRow->setShownIf([] { return MusicPlayer::get().blockedCount() > 0; });
     overlay->addRow(blockedRow);
 
+    overlay->addSubsection("Gameplay");
+    auto gameplayRow = ToggleRow::create(
+        "Lazer pause and results", w, k,
+        [mod] { return mod->getSettingValue<bool>("restyle-gameplay"); },
+        [mod] {
+            bool v = !mod->getSettingValue<bool>("restyle-gameplay");
+            mod->setSettingValue<bool>("restyle-gameplay", v);
+            return v;
+        }
+    );
+    gameplayRow->setTooltip("The pause menu and the level complete screen the osu! way. GD's options and other mods' pause buttons stay reachable from them.");
+    overlay->addRow(gameplayRow);
+
     overlay->addSubsection("Updates");
     auto updatesRow = ToggleRow::create(
         "Check for updates on start", w, k,

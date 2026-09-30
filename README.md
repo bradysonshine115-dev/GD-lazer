@@ -107,7 +107,7 @@ None of these are required. The matching extras appear when a mod is installed.
 - **`early-load`** is set so the mod can restyle GD's loading screen from its first frame. Nothing else runs early. At that point the mod's own resources aren't loaded yet, so the loading screen is drawn entirely in code.
 - **GD layers run hidden.** Several overlays drive GD's own layers (RewardsPage, ChallengesPage, ProfilePage, InfoLayer, GJShopLayer, AccountLayer, CreatorLayer...) kept hidden and non-interactive, and call their handlers. GD's logic, networking and saving are never reimplemented.
 - **Networking:** level thumbnails, fetched from the Level Thumbnails community server (`levelthumbs.prevter.me`) and cached on disk, and the update check: `mod.json` and `changelog.md` from this repo's `main` branch, plus the GitHub release when you choose to update. No accounts, analytics or other requests.
-- **Settings:** everything can be switched off. `enabled` turns the whole mod off; the intro/outro, music player, popup restyle, profile restyle, pause and results restyle, background dim, blur and triangles each have their own toggle.
+- **Settings:** everything can be switched off. `enabled` turns the whole mod off; the intro/outro, music player, popup restyle, profile restyle, pause and results restyle (off by default), background dim, blur and triangles each have their own toggle.
 
 ## Building
 
