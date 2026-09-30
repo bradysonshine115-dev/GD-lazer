@@ -125,6 +125,10 @@
 			"version": ">=2.0.0",
 			"required": false
 		},
+		"joseii.ventilla": {
+			"version": ">=2.0.0",
+			"required": false
+		},
 		"dankmeme.globed2": {
 			"version": ">=2.0.0",
 			"required": false
