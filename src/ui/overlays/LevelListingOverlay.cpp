@@ -6,6 +6,8 @@
 #include "../core/Text.hpp"
 
 #include <Geode/Geode.hpp>
+
+#include <array>
 #include <Geode/modify/LevelBrowserLayer.hpp>
 #include <algorithm>
 #include <cctype>
@@ -92,6 +94,17 @@ namespace {
         {"Type", {"levels", "lists"}, false},
     };
     constexpr int DIFF_DEMON = 6;
+    // GD's demon filter takes GJDifficulty's demon values, the way its own
+    // DemonFilterSelectLayer hands them over: easy 7, medium 8, hard 6,
+    // insane 9, extreme 10 (the server ignores anything else). Indexed by
+    // our "Demon" row's option (0 any, 1-5 easy..extreme).
+    constexpr std::array<int, 6> DEMON_FILTER_VALUES {0, 7, 8, 6, 9, 10};
+    int demonOptionFor(int gdValue) {
+        for (int i = 1; i < static_cast<int>(DEMON_FILTER_VALUES.size()); i++) {
+            if (DEMON_FILTER_VALUES[i] == gdValue) return i;
+        }
+        return 0;
+    }
     enum General { RATED, UNRATED, FEATURED, EPIC, LEGENDARY, MYTHIC, ORIGINAL, COINS, TWO_PLAYER };
 
     // The quick searches GD's search screen offers: the sort tabs of the search page.
@@ -465,7 +478,7 @@ void LevelListingOverlay::readSearch(GJSearchObject* search) {
         int v = utils::numFromString<int>(part).unwrapOr(-1);
         if (v >= 0 && v <= 5) m_length |= 1u << v;
     }
-    m_demon = std::clamp(static_cast<int>(search->m_demonFilter), 0, 5);
+    m_demon = demonOptionFor(static_cast<int>(search->m_demonFilter));
     if (m_demon > 0) m_difficulty = 1u << DIFF_DEMON;
     auto flag = [this](bool on, General bit) { if (on) m_general |= 1u << bit; };
     flag(search->m_starFilter, RATED);
@@ -493,7 +506,7 @@ GJSearchObject* LevelListingOverlay::makeSearch(int page) {
                                   general(RATED), m_played == 1, general(FEATURED), 0, general(ORIGINAL),
                                   general(TWO_PLAYER), false, false, general(UNRATED), general(COINS),
                                   general(EPIC), general(LEGENDARY), general(MYTHIC), m_played == 2,
-                                  m_demon, 0, m_lists ? 1 : 0);
+                                  DEMON_FILTER_VALUES[std::clamp(m_demon, 0, 5)], 0, m_lists ? 1 : 0);
 }
 
 // --- loading (through GD's browser) ---
