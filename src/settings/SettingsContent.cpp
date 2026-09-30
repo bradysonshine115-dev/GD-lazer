@@ -1,6 +1,7 @@
 #include "SettingsContent.hpp"
 
 #include "../audio/MusicPlayer.hpp"
+#include "../integrations/Ventilla.hpp"
 #include "../ui/core/Text.hpp"
 #include "../ui/menu/MenuBackground.hpp"
 #include "../ui/overlays/BlockedSongsOverlay.hpp"
@@ -330,6 +331,76 @@ void buildSettings(SettingsOverlay* overlay, MenuLayer* menu, MenuBackground* ba
         CCDirector::get()->getRunningScene()->addChild(layer, 100);
         layer->showLayer(false);
     }));
+    // JoseII's Ventilla, when it's installed: its radio in place of the songs,
+    // and its own options as rows here (written to its settings, which it
+    // watches, so they take effect right away).
+    if (auto ventillaMod = ventilla::mod()) {
+        overlay->addSubsection("Ventilla radio");
+        auto radioRow = ToggleRow::create(
+            "Radio in the menus", w, k,
+            [mod] { return mod->getSettingValue<bool>("ventilla-radio"); },
+            [mod] {
+                bool on = !mod->getSettingValue<bool>("ventilla-radio");
+                MusicPlayer::get().setRadio(on);
+                return on;
+            }
+        );
+        radioRow->setTooltip("Ventilla's live radio as the menu music instead of your levels' songs. Off: your songs play and the radio keeps quiet in the menus. The music player has the same switch.");
+        overlay->addRow(radioRow);
+
+        // Ventilla's toggles: its setting key, our label, the tooltip.
+        auto theirs = [&](char const* key, char const* label, char const* tooltip) {
+            if (!ventillaMod->hasSetting(key)) return;
+            std::string k2 = key;
+            auto row = ToggleRow::create(
+                label, w, k,
+                [ventillaMod, k2] { return ventillaMod->getSettingValue<bool>(k2); },
+                [ventillaMod, k2] {
+                    bool v = !ventillaMod->getSettingValue<bool>(k2);
+                    ventillaMod->setSettingValue<bool>(k2, v);
+                    return v;
+                }
+            );
+            if (tooltip && *tooltip) row->setTooltip(tooltip);
+            overlay->addRow(row);
+        };
+        if (ventillaMod->hasSetting("volume")) {
+            overlay->addRow(SliderRow::create(
+                "Radio volume", w, k,
+                [ventillaMod] { return ventillaMod->getSettingValue<int64_t>("volume") / 100.f; },
+                [ventillaMod](float v) { ventillaMod->setSettingValue<int64_t>("volume", int64_t(std::round(v * 100))); },
+                percent
+            ));
+        }
+        theirs("fade-in", "Fade the radio in", "The radio fades in over a moment when it starts, instead of cutting in.");
+
+        overlay->addSubsection("Radio outside the menus");
+        theirs("play-in-normal-mode", "In levels", "The radio instead of the level's song in normal mode.");
+        theirs("play-in-practice-mode", "In practice mode", "The radio instead of the level's song in practice mode.");
+        theirs("play-in-pause-menu", "In the pause menu", "");
+        theirs("play-in-editor", "In the editor", "");
+#ifdef GEODE_IS_DESKTOP
+        theirs("play-in-background", "While the game is in the background", "Keeps streaming when you switch to another window.");
+#endif
+
+        overlay->addSubsection("Radio in GD's other rooms");
+        theirs("shop.mp3", "The shop", "");
+        theirs("shop3.mp3", "The community shop", "");
+        theirs("shop4.mp3", "The mechanic shop", "");
+        theirs("shop5.mp3", "The diamond shop", "");
+        theirs("secretShop.mp3", "The secret shop", "");
+        theirs("secretLoop.mp3", "The treasure room and the vault", "");
+        theirs("secretLoop02.mp3", "The vault of secrets", "");
+        theirs("secretLoop03.mp3", "The chamber of time", "");
+        theirs("secretLoop04.mp3", "The wraith", "");
+        theirs("tower01.mp3", "The tower", "");
+        theirs("extras", "Everywhere else", "Any other screen with its own music.");
+
+        overlay->addSubsection("Ventilla's buttons");
+        theirs("show-button-in-main-menu", "In the toolbar", "Ventilla's button (its popup: what's playing, its volume) in the main menu's toolbar. Takes effect the next time the menu loads.");
+        theirs("show-button-in-pause-menu", "In the pause menu", "");
+        theirs("show-button-in-editor-pause", "In the editor's pause menu", "");
+    }
 
     // --- Graphics ---
     overlay->beginSection("Graphics", icon::DESKTOP);

@@ -55,6 +55,9 @@ protected:
     void onTrackChanged(MusicPlayer::Track const* track, MusicPlayer::Direction direction);
     void showBackground(cocos2d::CCTexture2D* texture, MusicPlayer::Direction direction);
     void setText(cocos2d::CCLabelBMFont* label, std::string const& text);
+    // Ventilla's radio: no previous / next / shuffle / ban, no seek bar, its
+    // logo for the background, the radio button lit.
+    void applyRadioLayout(bool radio);
 
     float m_k = 1;
     float m_toolbarHeight = 0;
@@ -72,6 +75,12 @@ protected:
     std::vector<Button> m_buttons;
     size_t m_playButton = 0;
     size_t m_shuffleButton = 0;
+    size_t m_prevButton = 0;
+    size_t m_nextButton = 0;
+    size_t m_banButton = 0;
+    size_t m_radioButton = SIZE_MAX; // only with Ventilla installed
+    bool m_radio = false;
+    bool m_radioBackground = false;
 
     Tweened<float> m_alpha {0.f};
     Tweened<float> m_scale {0.9f};

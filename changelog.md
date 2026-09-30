@@ -2,6 +2,7 @@
 
 ## v0.6.1
 
+- Ventilla support: with JoseII's Ventilla installed, its live radio can be the menu's music instead of your levels' songs. The music player gets a radio button to switch between the two, shows the stream's current track, and the logo's visualiser follows the radio; Settings > Audio has the same switch and Ventilla's own options as rows of their own: the radio's volume and fade, where else it plays (levels, practice, the pause menu, the editor, the background, GD's shops and secret rooms) and its buttons (thanks BlueCrafter12 for the suggestion)
 - Fixed: crash on Settings > Audio > Soundtracks (thanks 1mercdev for the report)
 - Fixed: the pause menu staying up (and piling up) after unpausing with a key such as space, with Custom Keybinds (thanks 1mercdev for the report)
 - Fixed: the cursor sitting in the middle of the screen during a level with GD's lock cursor on and show cursor off (thanks Kierek3 for the report)

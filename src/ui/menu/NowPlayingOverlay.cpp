@@ -3,6 +3,7 @@
 #include "../../audio/Sfx.hpp"
 #include "../core/Quips.hpp"
 #include "../../integrations/LevelThumbnails.hpp"
+#include "../../integrations/Ventilla.hpp"
 #include "../core/Text.hpp"
 #include "../core/Theme.hpp"
 
@@ -100,10 +101,12 @@ bool NowPlayingOverlay::init(float toolbarHeight) {
     float playSize = BUTTON_SIZE * 1.4f;
     float gap = 5 * k;
     float cx = w / 2;
+    m_prevButton = m_buttons.size();
     addButton(icon::STEP_BACKWARD, cx - playSize * k / 2 - gap - BUTTON_SIZE * k / 2, BUTTON_SIZE, 1.f,
               [] { MusicPlayer::get().previous(); });
     m_playButton = m_buttons.size();
     addButton(icon::CIRCLE_PLAY, cx, playSize, 1.4f, [] { MusicPlayer::get().togglePause(); });
+    m_nextButton = m_buttons.size();
     addButton(icon::STEP_FORWARD, cx + playSize * k / 2 + gap + BUTTON_SIZE * k / 2, BUTTON_SIZE, 1.f,
               [] {
                   MusicPlayer::get().next();
@@ -114,7 +117,16 @@ bool NowPlayingOverlay::init(float toolbarHeight) {
     addButton(icon::SHUFFLE, bandH / 2, BUTTON_SIZE, 1.f, [] { MusicPlayer::get().toggleShuffle(); });
     m_buttons[m_shuffleButton].active = player.shuffle();
     // Mirror of shuffle on the right: never play this song again.
+    m_banButton = m_buttons.size();
     addButton(icon::BAN, w - bandH / 2, BUTTON_SIZE, 0.9f, [] { MusicPlayer::get().blockCurrent(); });
+    // With Ventilla installed: its radio instead of the songs, next to shuffle.
+    if (ventilla::loaded()) {
+        m_radioButton = m_buttons.size();
+        addButton(icon::RADIO, bandH / 2 + (BUTTON_SIZE + 5) * k, BUTTON_SIZE, 0.9f, [] {
+            auto& player = MusicPlayer::get();
+            player.setRadio(!player.radio());
+        });
+    }
 
     // Seek bar along the bottom edge.
     m_progressBg = RoundedBox::create({w, PROGRESS_HEIGHT / 2 * k}, CORNER * k, {YELLOW_DARKER.r, YELLOW_DARKER.g, YELLOW_DARKER.b, 128});
@@ -127,9 +139,19 @@ bool NowPlayingOverlay::init(float toolbarHeight) {
     m_progressHeight.set(PROGRESS_HEIGHT / 2 * k);
 
     this->setVisible(false);
+    applyRadioLayout(player.radio());
     onTrackChanged(player.current(), MusicPlayer::Direction::None);
     this->scheduleUpdate();
     return true;
+}
+
+void NowPlayingOverlay::applyRadioLayout(bool radio) {
+    m_radio = radio;
+    for (size_t i : {m_prevButton, m_nextButton, m_shuffleButton, m_banButton}) m_buttons[i].node->setVisible(!radio);
+    m_progressBg->setVisible(!radio);
+    m_progressFill->setVisible(!radio);
+    if (m_radioButton != SIZE_MAX) m_buttons[m_radioButton].active = radio;
+    if (!radio) m_radioBackground = false;
 }
 
 NowPlayingOverlay::Button& NowPlayingOverlay::addButton(char const* glyph, float x, float size, float iconScale,
@@ -227,6 +249,16 @@ void NowPlayingOverlay::onTrackChanged(MusicPlayer::Track const* track, MusicPla
     }
     setText(m_title, track->title);
     setText(m_artist, track->artist.empty() ? "Unknown artist" : track->artist);
+    if (MusicPlayer::get().radio()) {
+        applyRadioLayout(true);
+        // The stream's title changes often: the logo stays put.
+        if (!m_radioBackground) {
+            m_radioBackground = true;
+            showBackground(ventilla::logo(), direction);
+        }
+        return;
+    }
+    applyRadioLayout(false);
 
     Ref<NowPlayingOverlay> self = this;
     auto show = [self, generation, direction](CCTexture2D* texture) {
@@ -269,12 +301,13 @@ void NowPlayingOverlay::showBackground(CCTexture2D* texture, MusicPlayer::Direct
 
 NowPlayingOverlay::Button* NowPlayingOverlay::buttonAt(CCPoint world) {
     for (auto& b : m_buttons) {
-        if (nodeContains(b.node, world)) return &b;
+        if (b.node->isVisible() && nodeContains(b.node, world)) return &b;
     }
     return nullptr;
 }
 
 bool NowPlayingOverlay::inProgressBar(CCPoint world) {
+    if (m_radio) return false;
     auto local = m_panel->convertToNodeSpace(world);
     return local.x >= 0 && local.x <= m_panel->getContentSize().width
         && local.y >= 0 && local.y <= PROGRESS_HEIGHT * m_k;
@@ -313,7 +346,9 @@ void NowPlayingOverlay::update(float dt) {
     }
 
     // Buttons.
-    setIcon(m_buttons[m_playButton], player.isActive() && !player.isPaused() ? icon::CIRCLE_PAUSE : icon::CIRCLE_PLAY);
+    if (player.radio() != m_radio) applyRadioLayout(player.radio());
+    bool playing = m_radio ? ventilla::playing() && !ventilla::paused() : player.isActive() && !player.isPaused();
+    setIcon(m_buttons[m_playButton], playing ? icon::CIRCLE_PAUSE : icon::CIRCLE_PLAY);
     m_buttons[m_shuffleButton].active = player.shuffle();
     auto hoveredButton = interactive && !m_seeking ? buttonAt(mouse) : nullptr;
     for (auto& b : m_buttons) {

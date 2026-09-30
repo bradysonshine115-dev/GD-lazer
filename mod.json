@@ -34,7 +34,7 @@
 			"icons": {
 				"path": "resources/fonts/fa-solid-900.ttf",
 				"size": 96,
-				"charset": "58053,58721,61441,61442,61444,61445,61447,61452,61453,61458,61459,61461,61463,61473,61475,61480,61486,61498,61512,61515,61521,61523,61524,61527,61530,61534,61538,61543,61547,61550,61553,61556,61560,61563,61564,61568,61572,61573,61574,61585,61612,61613,61614,61632,61633,61637,61648,61655,61664,61671,61677,61678,61683,61694,61723,61724,61742,61746,61751,61764,61774,61796,61797,61830,61874,61902,61912,61918,61942,61944,62004,62091,62146,62197,62198,62212,62352,62373,62535,62568,62622,62679,62716,62717,62718,62750,62798,62803,62809,62882,62973,63193,63198,63244,63363,63364"
+				"charset": "58053,58721,61441,61442,61444,61445,61447,61452,61453,61458,61459,61461,61463,61473,61475,61480,61486,61498,61512,61515,61521,61523,61524,61527,61530,61534,61538,61543,61547,61550,61553,61556,61560,61563,61564,61568,61572,61573,61574,61585,61612,61613,61614,61632,61633,61637,61648,61655,61664,61671,61677,61678,61683,61694,61723,61724,61742,61746,61751,61764,61774,61796,61797,61830,61874,61902,61912,61918,61942,61944,62004,62091,62146,62197,62198,62212,62352,62373,62535,62568,62622,62679,62716,62717,62718,62745,62750,62798,62803,62809,62882,62973,63193,63198,63244,63363,63364,63703"
 			}
 		},
 		"files": [
@@ -173,6 +173,12 @@
 			"description": "Instead of the menu theme, play the songs of your downloaded levels one after another, and show the playing level's thumbnail (from the Level Thumbnails community) as the menu background. The toolbar's music button opens the player.",
 			"default": true
 		},
+		"ventilla-radio": {
+			"type": "bool",
+			"name": "Ventilla radio",
+			"description": "With JoseII's Ventilla installed, its live radio plays in the menus instead of your levels' songs. Off: your songs play and the radio keeps quiet. The music player has the same switch (the radio button).",
+			"default": true
+		},
 		"ui-sound-volume": {
 			"type": "int",
 			"name": "UI sound volume",
@@ -231,7 +237,12 @@
 			"type": "float",
 			"name": "Background parallax",
 			"description": "How far the menu background follows the mouse (on phones, the tilt), in percent of the screen.",
-			"default": {"win": 6, "mac": 6, "android": 8, "ios": 8},
+			"default": {
+				"win": 6,
+				"mac": 6,
+				"android": 8,
+				"ios": 8
+			},
 			"min": 0,
 			"max": 8,
 			"control": {
@@ -245,7 +256,12 @@
 			"type": "float",
 			"name": "Menu parallax",
 			"description": "How far the main menu's buttons follow the mouse (on phones, the tilt), in percent of the screen.",
-			"default": {"win": 1.5, "mac": 1.5, "android": 2, "ios": 2},
+			"default": {
+				"win": 1.5,
+				"mac": 1.5,
+				"android": 2,
+				"ios": 2
+			},
 			"min": 0,
 			"max": 8,
 			"control": {
@@ -260,14 +276,19 @@
 			"name": "Tilt parallax",
 			"description": "Move the menu with the phone's tilt (gyroscope and accelerometer).",
 			"default": true,
-			"platforms": ["android", "ios"]
+			"platforms": [
+				"android",
+				"ios"
+			]
 		},
 		"custom-cursor": {
 			"type": "bool",
 			"name": "osu! cursor",
 			"description": "Replace the mouse pointer with osu!'s menu cursor, which squashes, glows and taps when you click.",
 			"default": true,
-			"platforms": ["win"]
+			"platforms": [
+				"win"
+			]
 		},
 		"cursor-size": {
 			"type": "float",
@@ -276,7 +297,9 @@
 			"default": 0.6,
 			"min": 0.5,
 			"max": 2,
-			"platforms": ["win"],
+			"platforms": [
+				"win"
+			],
 			"control": {
 				"slider": true,
 				"slider-step": 0.1,
@@ -289,7 +312,9 @@
 			"name": "Cursor rotation",
 			"description": "The osu! cursor tilts as it moves and turns to follow the mouse while you drag.",
 			"default": true,
-			"platforms": ["win"]
+			"platforms": [
+				"win"
+			]
 		}
 	}
 }

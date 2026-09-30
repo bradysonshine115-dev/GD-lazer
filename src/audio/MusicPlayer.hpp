@@ -59,9 +59,15 @@ public:
 
     Track const* current() const;
     bool hasTracks() const { return !m_tracks.empty(); }
-    // Our track is on the music channel (it may be paused).
-    bool isActive() const { return m_active; }
-    bool isPaused() const { return m_paused; }
+    // Our track is on the music channel (it may be paused), or the radio is on.
+    bool isActive() const { return m_active || m_radio; }
+    bool isPaused() const;
+
+    // JoseII's Ventilla radio in place of the songs (with Ventilla installed
+    // and its radio on): GD's own loop plays, Ventilla streams over it, and
+    // current() describes the stream. Saved as the "ventilla-radio" setting.
+    bool radio() const { return m_radio; }
+    void setRadio(bool on);
 
     void togglePause();
     void next();
@@ -103,6 +109,11 @@ public:
 private:
     MusicPlayer();
     void rebuildPlaylist();
+    bool radioWanted() const;
+    void enterRadio();
+    void leaveRadio();
+    // The stream's title into the radio track; true when it changed.
+    bool refreshRadioTrack();
     void play(size_t index, Direction direction, unsigned startMs = 0, float fadeIn = 0.f);
     void notify(Direction direction);
 
@@ -114,6 +125,9 @@ private:
     bool m_introHold = false;
     std::unordered_set<int> m_blocked; // song IDs, saved as "music-blocked"
     unsigned m_savedPosition = 0; // where to resume after a level took over the channel
+    bool m_radio = false;
+    Track m_radioTrack {0, "", "Connecting...", "Ventilla radio", {}};
+    float m_radioPoll = 0;
     float m_sinceStart = 0;
     std::vector<size_t> m_history; // for "previous" in shuffle mode
 

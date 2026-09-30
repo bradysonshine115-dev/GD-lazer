@@ -1,5 +1,7 @@
 #include "MusicPlayer.hpp"
 
+#include "../integrations/Ventilla.hpp"
+
 #include <Geode/Geode.hpp>
 #include <Geode/modify/GameManager.hpp>
 
@@ -16,6 +18,7 @@ namespace {
     constexpr unsigned RESTART_CUTOFF_MS = 5000; // MusicController.restart_cutoff_point
     constexpr float END_GRACE_S = 1.f;
     constexpr unsigned MIN_TRACK_MS = 30000;         // ignore "not playing" right after starting a track
+    constexpr float RADIO_POLL_S = 0.5f;             // how often the stream's title is read
 
     std::mt19937& rng() {
         static std::mt19937 r {std::random_device {}()};
@@ -123,11 +126,78 @@ void MusicPlayer::rebuildPlaylist() {
 }
 
 MusicPlayer::Track const* MusicPlayer::current() const {
+    if (m_radio) return &m_radioTrack;
     return m_index < m_tracks.size() ? &m_tracks[m_index] : nullptr;
+}
+
+bool MusicPlayer::isPaused() const {
+    return m_radio ? ventilla::paused() : m_paused;
+}
+
+bool MusicPlayer::radioWanted() const {
+    return Mod::get()->getSettingValue<bool>("ventilla-radio") && ventilla::radioOn();
+}
+
+void MusicPlayer::enterRadio() {
+    bool was = m_radio;
+    if (!was) log::info("Menu music: Ventilla's radio");
+    m_radio = true;
+    m_active = false;
+    m_paused = false;
+    m_radioPoll = 0;
+    bool changed = refreshRadioTrack();
+    if (!was || changed) notify(Direction::None);
+}
+
+void MusicPlayer::leaveRadio() {
+    log::info("Menu music: back to the songs");
+    m_radio = false;
+    if (m_tracks.empty()) rebuildPlaylist();
+    if (m_tracks.empty()) {
+        // Nothing of ours: GD's loop, already playing, carries on.
+        notify(Direction::None);
+        return;
+    }
+    play(m_index, Direction::None, m_savedPosition, 1.f);
+}
+
+bool MusicPlayer::refreshRadioTrack() {
+    std::string title = ventilla::title();
+    if (title.empty()) title = ventilla::playing() ? "Live" : "Connecting...";
+    if (title == m_radioTrack.title) return false;
+    m_radioTrack.title = title;
+    return true;
+}
+
+void MusicPlayer::setRadio(bool on) {
+    Mod::get()->setSettingValue<bool>("ventilla-radio", on);
+    if (on) {
+        // Turning it on here means the radio: switch Ventilla's own "Enable
+        // Radio" on with it (off stays theirs: the radio may still be wanted
+        // in levels or the pause menu).
+        if (auto v = ventilla::mod(); v && !v->getSettingValue<bool>("enabled")) v->setSettingValue<bool>("enabled", true);
+        if (m_radio || !ventilla::radioOn()) return;
+        if (m_active) m_savedPosition = engine()->getMusicTimeMS(CHANNEL);
+        m_active = false;
+        m_paused = false;
+        // GD's loop is Ventilla's cue to start the radio; the menu-music hook
+        // below enters radio mode on the way.
+        GameManager::get()->playMenuMusic();
+    } else if (m_radio) {
+        leaveRadio();
+    }
 }
 
 bool MusicPlayer::startMenuMusic() {
     if (!enabled()) return false;
+
+    // Ventilla's radio plays over GD's own loop (and mutes it): let GD start
+    // the loop, and show the stream in the player.
+    if (radioWanted()) {
+        enterRadio();
+        return false;
+    }
+    m_radio = false;
 
     // Our song is already playing (e.g. GD asked again on a menu change): leave it alone.
     if (m_active) return true;
@@ -150,6 +220,11 @@ bool MusicPlayer::releaseIntro() {
     m_introHold = false;
     log::info("Intro starts the music (held: {})", held);
     if (!enabled()) return false;
+    if (radioWanted()) {
+        enterRadio();
+        return false;
+    }
+    m_radio = false;
     if (m_tracks.empty()) {
         if (!held) return false;
         rebuildPlaylist();
@@ -195,7 +270,7 @@ std::string MusicPlayer::handOff() {
 }
 
 void MusicPlayer::adopt(Track track) {
-    if (!enabled() || m_introHold) return;
+    if (!enabled() || m_introHold || m_radio) return;
     auto e = engine();
     if (!e->isMusicPlaying(CHANNEL) || e->getActiveMusic(CHANNEL) != track.path) return;
     if (m_tracks.empty()) rebuildPlaylist();
@@ -222,6 +297,10 @@ void MusicPlayer::adopt(Track track) {
 }
 
 void MusicPlayer::togglePause() {
+    if (m_radio) {
+        ventilla::setPaused(!ventilla::paused());
+        return;
+    }
     if (!m_active) {
         // Something else took the channel (a song preview...): take it back.
         if (!m_tracks.empty()) play(m_index, Direction::None, m_savedPosition);
@@ -233,7 +312,7 @@ void MusicPlayer::togglePause() {
 }
 
 void MusicPlayer::next() {
-    if (m_tracks.empty()) return;
+    if (m_tracks.empty() || m_radio) return;
     size_t index = (m_index + 1) % m_tracks.size();
     if (m_shuffle && m_tracks.size() > 1) {
         std::uniform_int_distribution<size_t> pick(0, m_tracks.size() - 2);
@@ -245,7 +324,7 @@ void MusicPlayer::next() {
 }
 
 void MusicPlayer::previous() {
-    if (m_tracks.empty()) return;
+    if (m_tracks.empty() || m_radio) return;
     if (m_active && positionMs() >= RESTART_CUTOFF_MS) {
         seek(0);
         return;
@@ -262,7 +341,7 @@ void MusicPlayer::previous() {
 }
 
 void MusicPlayer::seek(float fraction) {
-    if (!m_active) return;
+    if (!m_active || m_radio) return;
     unsigned len = lengthMs();
     if (len == 0) return;
     unsigned ms = static_cast<unsigned>(std::clamp(fraction, 0.f, 1.f) * (len - 1));
@@ -272,7 +351,7 @@ void MusicPlayer::seek(float fraction) {
 
 void MusicPlayer::blockCurrent() {
     auto track = current();
-    if (!track) return;
+    if (!track || m_radio) return;
     log::info("Blocking \"{}\" ({})", track->title, track->songID);
     m_blocked.insert(track->songID);
     Mod::get()->setSavedValue("music-blocked", std::vector<int>(m_blocked.begin(), m_blocked.end()));
@@ -326,10 +405,12 @@ void MusicPlayer::toggleShuffle() {
 }
 
 unsigned MusicPlayer::positionMs() const {
+    if (m_radio) return 0;
     return m_active ? engine()->getMusicTimeMS(CHANNEL) : m_savedPosition;
 }
 
 unsigned MusicPlayer::lengthMs() const {
+    if (m_radio) return 0; // a live stream has no end
     return m_active ? engine()->getMusicLengthMS(CHANNEL) : 0;
 }
 
@@ -349,6 +430,18 @@ void MusicPlayer::notify(Direction direction) {
 }
 
 void MusicPlayer::update(float dt) {
+    if (m_radio) {
+        m_radioPoll += dt;
+        if (m_radioPoll < RADIO_POLL_S) return;
+        m_radioPoll = 0;
+        // Ventilla switched off from its own side: back to the songs.
+        if (!radioWanted()) {
+            leaveRadio();
+            return;
+        }
+        if (refreshRadioTrack()) notify(Direction::None);
+        return;
+    }
     if (!m_active) return;
     auto track = current();
     if (!track) {

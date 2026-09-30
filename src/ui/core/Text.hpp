@@ -100,6 +100,7 @@ namespace icon {
     constexpr auto USER_CHECK = "\xEF\x93\xBC";     // f4fc
     constexpr auto USER_CLOCK = "\xEF\x93\xBD";     // f4fd
     constexpr auto USER_GEAR = "\xEF\x93\xBE";      // f4fe
+    constexpr auto TOWER_BROADCAST = "\xEF\x94\x99";// f519
     constexpr auto COINS = "\xEF\x94\x9E";          // f51e
     constexpr auto STORE = "\xEF\x95\x8E";          // f54e
     constexpr auto SHIRT = "\xEF\x95\x93";          // f553
@@ -111,6 +112,7 @@ namespace icon {
     constexpr auto RUNNING = "\xEF\x9C\x8C";        // f70c
     constexpr auto CALENDAR_DAY = "\xEF\x9E\x83";   // f783
     constexpr auto CALENDAR_WEEK = "\xEF\x9E\x84";  // f784
+    constexpr auto RADIO = "\xEF\xA3\x97";          // f8d7
 }
 
 cocos2d::CCLabelBMFont* makeIcon(char const* glyph, float size);

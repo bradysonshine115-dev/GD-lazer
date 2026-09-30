@@ -31,7 +31,7 @@ private:
     AudioAnalyzer() = default;
     bool attach();
 
-    void* m_group = nullptr; // FMOD::ChannelGroup*
+    void* m_group = nullptr; // FMOD::ChannelControl*: GD's music group, or Ventilla's channel
     void* m_fft = nullptr;   // FMOD::DSP*
     unsigned int m_lastFrame = 0;
 

@@ -163,6 +163,7 @@ namespace {
         {"geode.loader/geode-button", {icon::PUZZLE, "mods"}},
         // Globed (multiplayer mod): its button just says "main menu" otherwise.
         {"dankmeme.globed2/main-menu-button", {icon::GLOBE, "multiplayer"}},
+        {"joseii.ventilla/button", {icon::RADIO, "ventilla"}},
     };
     // Already covered elsewhere (button bar / user section), so not duplicated.
     constexpr std::array SKIPPED_BUTTONS {"settings-button", "profile-button"};

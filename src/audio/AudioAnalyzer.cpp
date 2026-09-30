@@ -1,5 +1,8 @@
 #include "AudioAnalyzer.hpp"
 
+#include "../integrations/Ventilla.hpp"
+#include "MusicPlayer.hpp"
+
 #include <Geode/Geode.hpp>
 #include <Geode/fmod/fmod.hpp>
 #include <algorithm>
@@ -29,12 +32,18 @@ bool AudioAnalyzer::attach() {
     auto engine = FMODAudioEngine::sharedEngine();
     if (!engine || !engine->m_system || !engine->m_backgroundMusicChannel) return false;
 
-    auto group = engine->m_backgroundMusicChannel;
+    FMOD::ChannelControl* group = engine->m_backgroundMusicChannel;
+    // Ventilla's radio plays on a channel of its own (GD's loop runs muted
+    // under it): listen there while it's the menu's music.
+    if (MusicPlayer::get().radio()) {
+        if (auto radio = ventilla::channel()) group = radio;
+    }
     if (m_group == group && m_fft) return true;
 
     // Group changed (or first run): drop the old DSP and attach a fresh one.
+    // (A radio channel that's gone just refuses the removal.)
     if (m_fft) {
-        if (m_group) static_cast<FMOD::ChannelGroup*>(m_group)->removeDSP(static_cast<FMOD::DSP*>(m_fft));
+        if (m_group) static_cast<FMOD::ChannelControl*>(m_group)->removeDSP(static_cast<FMOD::DSP*>(m_fft));
         static_cast<FMOD::DSP*>(m_fft)->release();
         m_fft = nullptr;
     }
