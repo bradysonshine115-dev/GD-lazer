@@ -224,7 +224,11 @@ namespace {
             bool focused = window && GetForegroundWindow() == window;
 
             // Visibility: GD's say, and only over the window (outside, the system cursor is back).
-            bool visible = g_gdShowsCursor && inside;
+            // GD's "lock cursor in game" pins the mouse to the middle of the
+            // window in GLFW's disabled mode, which hides the system cursor by
+            // itself, so GD never asks for it hidden: ours goes while the lock
+            // is on. The view's own flag, since showCursor clears it too.
+            bool visible = g_gdShowsCursor && !view->getCursorLocked() && inside;
             if (visible != m_visible) {
                 m_visible = visible;
                 if (visible) { // PopIn
