@@ -33,10 +33,13 @@ for _ in $(seq 1 10); do
     [[ -n "$device" ]] && break
     addr=$("$ADB" mdns services | awk '/_adb-tls-connect/ { print $3; exit }')
     [[ -n "$addr" ]] && "$ADB" connect "$addr" >/dev/null || true
+    # Off the dorm Wi-Fi the phone is reachable over Tailscale, where adbd was
+    # switched to a fixed port with `adb tcpip 5555` (lasts until the phone reboots).
+    "$ADB" connect "${PHONE_ADDR:-100.97.56.74:5555}" >/dev/null 2>&1 || true
     sleep 1
 done
 if [[ -z "$device" ]]; then
-    echo "No phone found. Is Wireless debugging on, and the phone on the same Wi-Fi?" >&2
+    echo "No phone found. Is Wireless debugging on (same Wi-Fi), or Tailscale up with adb tcpip 5555 set?" >&2
     exit 1
 fi
 echo "Phone: $device"
