@@ -469,10 +469,10 @@ class $modify(LazerMenuLayer, MenuLayer) {
         m_fields->ticker = ticker;
 
         // A word to the testers along the bottom edge (osu!'s development build notice).
-        auto notice = lazer::makeText("You're one of few valuable testers, expect rare crashes", lazer::Weight::Regular, 10 * k);
+        auto notice = lazer::makeText("You're one of few valuable testers, expect rare crashes", lazer::Weight::Regular, 16 * k);
         notice->setColor({255, 255, 255});
-        notice->setOpacity(150);
-        notice->setPosition({win.width / 2, 8 * k});
+        notice->setOpacity(190);
+        notice->setPosition({win.width / 2, 12 * k});
         notice->setID("tester-notice"_spr);
         this->addChild(notice, 12);
 
