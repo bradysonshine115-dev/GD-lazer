@@ -51,9 +51,6 @@ void buildSettings(SettingsOverlay* overlay, MenuLayer* menu, MenuBackground* ba
 
     auto gd = std::make_shared<GDOptions>();
     overlay->keepAlive(gd);
-    // A hidden OptionsLayer to reuse GD's own handlers (help, rate, soundtracks...).
-    auto options = std::make_shared<Ref<OptionsLayer>>(OptionsLayer::create());
-    overlay->keepAlive(options);
 
     // GD splits long categories over several pages with the same title ("Visual");
     // consecutive pages with the same title share one subsection.
@@ -323,7 +320,16 @@ void buildSettings(SettingsOverlay* overlay, MenuLayer* menu, MenuBackground* ba
     for (int page : pagesFor(Home::Audio)) addGDPage(page);
     overlay->addSubsection("Songs");
     overlay->addRow(ButtonRow::create("Song browser", w, k, [gd] { gd->layer()->onSongBrowser(nullptr); }));
-    overlay->addRow(ButtonRow::create("Soundtracks", w, k, [options] { (*options)->onSoundtracks(nullptr); }));
+    // GD's own settings open this through OptionsLayer::onSoundtracks, which
+    // hides that layer first and crashes when the layer was never shown.
+    overlay->addRow(ButtonRow::create("Soundtracks", w, k, [] {
+        // The way GD shows its drop-down layers (GJMoreGamesLayer): into the
+        // scene first, then the slide-in.
+        auto layer = SongsLayer::create();
+        if (!layer) return;
+        CCDirector::get()->getRunningScene()->addChild(layer, 100);
+        layer->showLayer(false);
+    }));
 
     // --- Graphics ---
     overlay->beginSection("Graphics", icon::DESKTOP);
