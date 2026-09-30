@@ -19,6 +19,7 @@ void SongSelect::updateWedge(bool animate) {
     m_wedgeButtons.clear();
     m_details = nullptr;
     m_songWidget = nullptr;
+    m_loadingSpinner = nullptr;
     m_wedge->removeAllChildren();
     if (animate) {
         m_wedge->setPositionX(-24 * m_k);
@@ -31,7 +32,17 @@ void SongSelect::updateWedge(bool animate) {
 
     if (!m_hasSelection) {
         std::string text = "no levels match your search";
-        if (m_entries.empty()) text = "no levels yet";
+        bool retry = false;
+        if (packMode()) {
+            auto state = packs::state();
+            text = "no map packs match your search";
+            if (state == packs::State::Loading || state == packs::State::Unloaded) text = "loading map packs...";
+            else if (state == packs::State::Failed) {
+                text = "couldn't load the map packs";
+                retry = true;
+            } else if (m_query.empty() && m_group == Group::Liked) text = "no map packs completed yet";
+            else if (m_query.empty() && m_group == Group::Official) text = "every map pack is complete!";
+        } else if (m_entries.empty()) text = "no levels yet";
         else if (m_query.empty() && m_group == Group::Liked) text = "no hearted levels yet";
         else if (m_query.empty() && m_folder != 0) text = "nothing in this folder";
         auto none = makeText(text, Weight::SemiBold, 26 * k);
@@ -39,6 +50,18 @@ void SongSelect::updateWedge(bool animate) {
         none->setAnchorPoint({0, 0.5f});
         none->setPosition({40 * k, H - 60 * k});
         m_wedge->addChild(none);
+        if (packMode() && (packs::state() == packs::State::Loading || packs::state() == packs::State::Unloaded)) {
+            // A spinner beside it (turned in update()), on the glyph's own centre.
+            auto holder = CCNode::create();
+            auto glyph = makeIcon(icon::ROTATE, 22 * k);
+            glyph->setColor(theme::LIGHT1);
+            glyph->setAnchorPoint({0, 0});
+            if (auto letter = glyph->getChildByType<CCSprite>(0)) glyph->setPosition(-letter->getPosition() * glyph->getScale());
+            holder->addChild(glyph);
+            holder->setPosition({40 * k + none->getScaledContentSize().width + 22 * k, H - 60 * k});
+            m_wedge->addChild(holder);
+            m_loadingSpinner = holder;
+        }
         if (m_group == Group::Liked && m_query.empty()) {
             auto hint = makeText("heart a level with the heart next to its title", Weight::Regular, 17 * k);
             hint->setColor(theme::CONTENT2);
@@ -46,13 +69,22 @@ void SongSelect::updateWedge(bool animate) {
             hint->setPosition({40 * k, H - 94 * k});
             m_wedge->addChild(hint);
         }
-        if (!m_query.empty()) {
+        if (retry) {
+            addButton(m_wedgeButtons, m_wedge, icon::ROTATE, "try again", {40 * k, H - 104 * k}, 30 * k, theme::COLOUR3, [this] {
+                packs::load();
+                this->updateWedge(false);
+            }, 0);
+        }
+        if (!m_query.empty() && !retry) {
             // osu!'s NoResultsPlaceholder: clear the search, or search online for it.
             std::string query = m_query.size() > 24 ? m_query.substr(0, 22) + "..." : m_query;
             float y = H - 104 * k;
-            addButton(m_wedgeButtons, m_wedge, icon::GLOBE, fmt::format("search online for \"{}\"", query), {40 * k, y},
-                      30 * k, theme::COLOUR3, [this] { this->browseOnline(); }, 0);
-            addButton(m_wedgeButtons, m_wedge, icon::XMARK, "clear search", {40 * k, y - 40 * k}, 30 * k, TAB, [this] {
+            if (!packMode()) {
+                addButton(m_wedgeButtons, m_wedge, icon::GLOBE, fmt::format("search online for \"{}\"", query), {40 * k, y},
+                          30 * k, theme::COLOUR3, [this] { this->browseOnline(); }, 0);
+                y -= 40 * k;
+            }
+            addButton(m_wedgeButtons, m_wedge, icon::XMARK, "clear search", {40 * k, y}, 30 * k, TAB, [this] {
                 m_query.clear();
                 remembered().query.clear();
                 if (m_search) m_search->setString("");
@@ -74,14 +106,16 @@ void SongSelect::updateWedge(bool animate) {
     float x0 = 36 * k;
     float maxW = w - x0 - 40 * k;
     float titleW = e.official ? maxW : maxW - 112 * k;
+    auto pack = packOf(e);
     auto title = makeText(e.name, Weight::SemiBold, 36 * k);
+    if (e.packHeader && pack) title->setColor(pack->textColor);
     title->setAnchorPoint({0, 0.5f});
     title->setPosition({x0, H - 38 * k});
     fit(title, titleW);
     m_wedge->addChild(title, 1);
 
     // Heart (GD's favourite) and delete: saved levels only, like the level page.
-    if (!e.official) {
+    if (!e.official && e.pack < 0) {
         float iconH = 30 * k;
         CCSize size {iconH * 1.4f, iconH};
         // Icon only: a small square-ish pill, icon centred.
@@ -108,8 +142,15 @@ void SongSelect::updateWedge(bool animate) {
         iconButton(icon::TRASH, x + size.width + 8 * k, TAB, [this] { this->confirmDeleteLevel(); });
     }
 
-    auto song = infoRow({{icon::MUSIC, e.songArtist.empty() ? e.songTitle : e.songTitle + "  -  " + e.songArtist}},
-                        17 * k, theme::CONTENT2);
+    std::vector<std::pair<char const*, std::string>> line;
+    if (e.packHeader) {
+        int total = pack ? static_cast<int>(pack->levelIDs.size()) : 0;
+        line.push_back({icon::BOXES, fmt::format("map pack  -  {} level{}", total, total == 1 ? "" : "s")});
+    } else {
+        line.push_back({icon::MUSIC, e.songArtist.empty() ? e.songTitle : e.songTitle + "  -  " + e.songArtist});
+        if (pack) line.push_back({icon::BOXES, pack->name});
+    }
+    auto song = infoRow(line, 17 * k, theme::CONTENT2);
     song->setPosition({x0 + 2 * k, H - 76 * k});
     if (song->getContentSize().width > maxW) song->setScale(maxW / song->getContentSize().width);
     m_wedge->addChild(song, 1);
@@ -126,10 +167,19 @@ void SongSelect::updateWedge(bool animate) {
     face->setPosition({x0 + 17 * k, statsY});
     m_wedge->addChild(face, 1);
     std::vector<std::pair<char const*, std::string>> stats;
-    if (e.stars > 0) stats.push_back({rewardIcon(e), std::to_string(e.stars)});
-    if (!e.platformer) stats.push_back({icon::CLOCK, levels::lengthName(e.length)});
-    if (e.coins > 0) stats.push_back({icon::COINS, fmt::format("{}/{}", e.coinsCollected, e.coins)});
-    if (!e.official) stats.push_back({icon::ID_CARD, std::to_string(e.id)});
+    if (e.packHeader) {
+        // The pack's reward, and how far along it is.
+        int total = pack ? static_cast<int>(pack->levelIDs.size()) : 0;
+        int done = pack ? std::min(pack->completed, total) : 0;
+        if (e.stars > 0) stats.push_back({icon::STAR, "+" + std::to_string(e.stars)});
+        if (e.coins > 0) stats.push_back({icon::COINS, "+" + std::to_string(e.coins)});
+        stats.push_back({total > 0 && done >= total ? icon::CHECK : nullptr, fmt::format("{}/{} done", done, total)});
+    } else {
+        if (e.stars > 0) stats.push_back({rewardIcon(e), std::to_string(e.stars)});
+        if (!e.platformer) stats.push_back({icon::CLOCK, levels::lengthName(e.length)});
+        if (e.coins > 0) stats.push_back({icon::COINS, fmt::format("{}/{}", e.coinsCollected, e.coins)});
+        if (!e.official) stats.push_back({icon::ID_CARD, std::to_string(e.id)});
+    }
     auto statsRow = infoRow(stats, 17 * k, theme::CONTENT1);
     statsRow->setPosition({x0 + 44 * k, statsY});
     m_wedge->addChild(statsRow, 1);
@@ -201,6 +251,89 @@ void SongSelect::buildDetails(float top, float bottom) {
         b.clip = m_details;
         return b;
     };
+
+    // A pack: each level's state, and the reward for finishing them all.
+    auto pack = packOf(e);
+    if (e.packHeader) {
+        if (pack) {
+            int index = e.pack;
+            int total = static_cast<int>(pack->levelIDs.size());
+            int done = std::min(pack->completed, total);
+            section("progress");
+            bar("levels", total > 0 ? done * 100 / total : 0, pack->barColor);
+            if (pack->state == packs::State::Loaded) {
+                for (auto const& l : pack->levels) {
+                    bool beaten = l.normalPercent >= 100;
+                    auto row = infoRow({{beaten ? icon::CHECK : icon::XMARK, l.name}, {nullptr, fmt::format("{}%", l.normalPercent)}},
+                                       15 * k, beaten ? theme::CONTENT1 : theme::CONTENT2);
+                    if (row->getContentSize().width > maxW) row->setScale(maxW / row->getContentSize().width);
+                    add(row, 0, y);
+                    y -= 24 * k;
+                }
+                y -= 6 * k;
+            } else if (pack->state == packs::State::Failed) {
+                auto label = makeText("couldn't load the pack's levels", Weight::Regular, 15 * k);
+                label->setColor(theme::CONTENT2);
+                label->setAnchorPoint({0, 0.5f});
+                add(label, 0, y);
+                y -= 34 * k;
+                button(icon::ROTATE, "try again", TAB, [this, index] {
+                    packs::loadLevels(static_cast<size_t>(index));
+                    this->refreshDetails();
+                });
+                y -= 40 * k;
+            } else if (pack->state == packs::State::Loading || e.pack == m_expandedPack) {
+                auto label = makeText("loading the pack's levels...", Weight::Regular, 15 * k);
+                label->setColor(theme::CONTENT2);
+                label->setAnchorPoint({0, 0.5f});
+                add(label, 0, y);
+                y -= 30 * k;
+            }
+
+            section("reward");
+            std::vector<std::pair<char const*, std::string>> reward;
+            if (pack->stars > 0) reward.push_back({icon::STAR, fmt::format("{} star{}", pack->stars, pack->stars == 1 ? "" : "s")});
+            if (pack->coins > 0) reward.push_back({icon::COINS, fmt::format("{} coin{}", pack->coins, pack->coins == 1 ? "" : "s")});
+            if (reward.empty()) reward.push_back({nullptr, "none"});
+            add(infoRow(reward, 15 * k, theme::CONTENT1), 0, y);
+            y -= 30 * k;
+            if (packs::canClaim(*pack)) {
+                button(icon::GIFT, "claim reward", theme::COLOUR3, [this, index] { this->claimPack(index); });
+                y -= 40 * k;
+            } else {
+                auto label = makeText(pack->claimed ? "claimed" : "beat every level in the pack to claim it", Weight::Regular, 15 * k);
+                label->setColor(theme::LIGHT1);
+                label->setAnchorPoint({0, 0.5f});
+                add(label, 0, y);
+                y -= 30 * k;
+            }
+            if (e.pack != m_expandedPack) {
+                button(icon::CHEVRON_DOWN, "show levels", TAB, [this, index] { this->expandPack(index); });
+                y -= 40 * k;
+            }
+        }
+        m_details->setContentHeight(-y + 10 * k);
+        return;
+    }
+    if (pack) {
+        // One of a pack's levels: the pack's progress on top.
+        int index = e.pack;
+        int total = static_cast<int>(pack->levelIDs.size());
+        int done = std::min(pack->completed, total);
+        section("map pack");
+        auto name = makeText(pack->name, Weight::SemiBold, 15 * k);
+        name->setColor(pack->textColor);
+        name->setAnchorPoint({0, 0.5f});
+        fit(name, maxW);
+        add(name, 0, y);
+        y -= 26 * k;
+        bar("levels", total > 0 ? done * 100 / total : 0, pack->barColor);
+        if (packs::canClaim(*pack)) {
+            button(icon::GIFT, "claim reward", theme::COLOUR3, [this, index] { this->claimPack(index); });
+            y -= 40 * k;
+        }
+        y -= 8 * k;
+    }
 
     // Progress.
     section("progress");
@@ -531,13 +664,14 @@ void SongSelect::updateSongCard() {
 
 int SongSelect::getActiveSongID() {
     if (!m_hasSelection) return 0;
-    return m_entries[m_visible[m_selected]].level->m_songID;
+    auto level = m_entries[m_visible[m_selected]].level;
+    return level ? level->m_songID : 0;
 }
 
 void SongSelect::loadLeaderboard() {
     if (!m_hasSelection) return;
     auto const& e = m_entries[m_visible[m_selected]];
-    if (e.official) return;
+    if (e.official || !e.level) return;
     m_board = Board::Loading;
     m_boardLevel = e.id;
     m_boardScores = nullptr;
@@ -551,7 +685,7 @@ void SongSelect::loadLeaderboard() {
 void SongSelect::openComments() {
     if (!m_hasSelection || m_starting) return;
     auto const& e = m_entries[m_visible[m_selected]];
-    if (e.official) return;
+    if (e.official || !e.level) return;
     closeFolders();
     CommentsOverlay::present(e.level);
 }

@@ -18,7 +18,7 @@ namespace lazer {
 namespace songselect {
     levels::Kind g_lastKind = levels::Kind::Classic;
     Remembered& remembered() {
-        static Remembered r[2];
+        static Remembered r[3];
         return r[static_cast<int>(g_lastKind)];
     }
 
@@ -122,14 +122,25 @@ bool SongSelect::init(levels::Kind kind, bool fromMenu) {
     m_sort = r.sort;
     m_query = r.query;
     if (m_search && !m_query.empty()) m_search->setString(m_query);
-    m_entries = levels::all(m_kind);
-    log::info("Song select: {} {} levels", m_entries.size(), m_kind == levels::Kind::Platformer ? "platformer" : "classic");
+    if (packMode()) {
+        // The packs (and any pack's levels) come from the session's store,
+        // told here whenever more arrive; GD's cache may fill it in at once.
+        packs::setListener([this] { this->onPacksChanged(); });
+        for (auto& p : packs::all()) packs::refresh(p);
+        packs::load();
+        if (packs::state() != packs::State::Loading) rebuildPackEntries();
+        log::info("Song select: {} map packs", packs::all().size());
+    } else {
+        m_entries = levels::all(m_kind);
+        log::info("Song select: {} {} levels", m_entries.size(), m_kind == levels::Kind::Platformer ? "platformer" : "classic");
+    }
     // Coming from the menu, its song carries on and picks the selection (osu!
     // selects the playing beatmap). Back from a level, the last selection stays.
     auto track = MusicPlayer::get().current();
     int playingID = track ? track->songID : 0;
     std::string playing = fromMenu ? MusicPlayer::get().handOff() : "";
-    if (playing.empty() || !selectSong(playing, playingID)) applyFilter();
+    if (packMode() || playing.empty() || !selectSong(playing, playingID)) applyFilter();
+    if (packMode()) restoreExpandedPack();
     m_scroll = m_scrollTarget;
 
     this->setTouchEnabled(true);
@@ -146,6 +157,7 @@ void SongSelect::onEnter() {
 
 void SongSelect::onExit() {
     CCDirector::get()->getMouseDispatcher()->removeDelegate(this);
+    if (packMode()) packs::setListener(nullptr);
     auto glm = GameLevelManager::sharedState();
     if (glm->m_leaderboardManagerDelegate == this) glm->m_leaderboardManagerDelegate = nullptr;
     stopListening();
@@ -204,8 +216,10 @@ void SongSelect::buildFilter() {
     // Groups (osu!'s collection / grouping), GD's folders and sort.
     float rowY = m_win.height - 72 * k;
     float x = left + 22 * k;
-    char const* names[] = {"saved", "official", "liked"};
-    char const* glyphs[] = {nullptr, nullptr, icon::HEART};
+    // Packs: every pack, the ones still to finish, the finished ones.
+    bool packs = packMode();
+    char const* names[] = {packs ? "all" : "saved", packs ? "unfinished" : "official", packs ? "completed" : "liked"};
+    char const* glyphs[] = {nullptr, nullptr, packs ? icon::CHECK : icon::HEART};
     for (int i = 0; i < 3; i++) {
         auto& tab = addButton(m_tabs, this, glyphs[i], names[i], {x, rowY}, 28 * k, TAB, [this, i] {
             m_group = static_cast<Group>(i);
@@ -314,7 +328,7 @@ void SongSelect::confirmDeleteUnhearted() {
 void SongSelect::confirmDeleteLevel() {
     if (!m_hasSelection || m_selected >= m_visible.size()) return;
     auto const& e = m_entries[m_visible[m_selected]];
-    if (e.official) return;
+    if (e.official || e.pack >= 0 || !e.level) return;
     Ref<GJGameLevel> level = e.level;
     Ref<SongSelect> self = this;
     Dialog::show(icon::TRASH, "Confirm deletion of", fmt::format("{} by {}", e.name, e.creator), {
@@ -350,12 +364,17 @@ void SongSelect::buildFooter() {
     float x = back.node->getPositionX() + back.node->getContentSize().width + 14 * k;
     auto& random = addButton(m_buttons, this, icon::SHUFFLE, "random", {x, y}, h, TAB, [this] { this->selectRandom(); }, skewDegrees());
     x += random.node->getContentSize().width + 10 * k;
-    // Online levels: GD's search, with what's typed here already in it.
-    auto& browse = addButton(m_buttons, this, icon::GLOBE, "browse", {x, y}, h, TAB, [this] { this->browseOnline(); }, skewDegrees());
-    x += browse.node->getContentSize().width + 10 * k;
+    if (!packMode()) {
+        // Online levels: GD's search, with what's typed here already in it.
+        auto& browse = addButton(m_buttons, this, icon::GLOBE, "browse", {x, y}, h, TAB, [this] { this->browseOnline(); }, skewDegrees());
+        x += browse.node->getContentSize().width + 10 * k;
+    }
     auto& page = addButton(m_buttons, this, icon::CIRCLE_INFO, "level page", {x, y}, h, TAB, [this] { this->openLevelPage(); }, skewDegrees());
     x += page.node->getContentSize().width + 10 * k;
-    addButton(m_buttons, this, icon::TRASH, "delete unhearted", {x, y}, h, TAB, [this] { this->confirmDeleteUnhearted(); }, skewDegrees());
+    // Packs' levels aren't yours to delete from here.
+    if (!packMode()) {
+        addButton(m_buttons, this, icon::TRASH, "delete unhearted", {x, y}, h, TAB, [this] { this->confirmDeleteUnhearted(); }, skewDegrees());
+    }
 
     auto& play = addButton(m_buttons, this, icon::PLAY, "play", {0, y}, h, PURPLE, [this] { this->start(); }, skewDegrees());
     play.node->setPositionX(m_win.width - play.node->getContentSize().width + 12 * k);
@@ -407,20 +426,33 @@ SongSelect::Button& SongSelect::addButton(std::vector<Button>& list, CCNode* par
 
 void SongSelect::applyFilter() {
     int keepId = -1;
-    bool keepOfficial = false;
-    if (m_hasSelection && m_selected < m_visible.size()) {
+    bool keepOfficial = false, keepHeader = false;
+    if (m_hasSelection && m_selected < m_visible.size() && m_visible[m_selected] < m_entries.size()) {
         auto const& e = m_entries[m_visible[m_selected]];
         keepId = e.id;
         keepOfficial = e.official;
+        keepHeader = e.packHeader;
     } else {
         keepId = remembered().selectedId;
         keepOfficial = remembered().selectedOfficial;
+        keepHeader = remembered().selectedHeader;
     }
 
     std::string query = lower(m_query);
     m_visible.clear();
     for (size_t i = 0; i < m_entries.size(); i++) {
         auto const& e = m_entries[i];
+        if (packMode()) {
+            // The packs are the rows; the open one's levels go under it below.
+            if (!e.packHeader) continue;
+            auto pack = packOf(e);
+            bool done = pack && !pack->levelIDs.empty() && pack->completed >= static_cast<int>(pack->levelIDs.size());
+            if (m_group == Group::Official && done) continue; // unfinished
+            if (m_group == Group::Liked && !done) continue;   // completed
+            if (!query.empty() && e.search.find(query) == std::string::npos) continue;
+            m_visible.push_back(i);
+            continue;
+        }
         if ((m_group == Group::Official) != e.official) continue;
         if (m_group == Group::Liked && !levels::favorited(e)) continue;
         if (m_group != Group::Official && m_folder != 0 && e.folder != m_folder) continue;
@@ -450,6 +482,20 @@ void SongSelect::applyFilter() {
         case levels::Sort::Default:
             break;
     }
+    if (packMode() && m_expandedPack >= 0) {
+        // The open pack's levels sit under its header, in the pack's order.
+        for (size_t v = 0; v < m_visible.size(); v++) {
+            if (m_entries[m_visible[v]].pack != m_expandedPack) continue;
+            std::vector<size_t> rows;
+            for (size_t j = m_visible[v] + 1; j < m_entries.size(); j++) {
+                if (m_entries[j].packHeader || m_entries[j].pack != m_expandedPack) break;
+                rows.push_back(j);
+            }
+            m_visible.insert(m_visible.begin() + v + 1, rows.begin(), rows.end());
+            break;
+        }
+    }
+    layoutRows();
 
     // Indices changed: panels still in the list move to their new index (no
     // fade in again while typing), the rest go.
@@ -465,9 +511,9 @@ void SongSelect::applyFilter() {
     for (auto& [entry, panel] : byEntry) panel.root->removeFromParent();
 
     for (size_t i = 0; i < m_tabs.size(); i++) m_tabs[i].selected = static_cast<int>(m_group) == static_cast<int>(i);
-    // RobTop's levels aren't in folders.
+    // RobTop's levels aren't in folders (and packs aren't levels).
     auto& folderButton = m_buttons[m_folderButton];
-    folderButton.node->setVisible(m_group != Group::Official);
+    folderButton.node->setVisible(m_group != Group::Official && !packMode());
     folderButton.selected = m_folder != 0;
     if (m_folderLabel) {
         m_folderLabel->setString(m_folder == 0 ? "all folders" : levels::folderName(m_folder).c_str());
@@ -479,8 +525,15 @@ void SongSelect::applyFilter() {
         fitLabel(m_sortLabel, m_sortLabel->getParent());
     }
     if (m_countLabel) {
-        m_countLabel->setString(fmt::format("{} {} level{}", m_visible.size(),
-            m_kind == levels::Kind::Platformer ? "platformer" : "classic", m_visible.size() == 1 ? "" : "s").c_str());
+        if (packMode()) {
+            size_t n = std::count_if(m_visible.begin(), m_visible.end(), [&](size_t i) { return m_entries[i].packHeader; });
+            std::string text = fmt::format("{} map pack{}", n, n == 1 ? "" : "s");
+            if (packs::state() == packs::State::Loading) text += " so far";
+            m_countLabel->setString(text.c_str());
+        } else {
+            m_countLabel->setString(fmt::format("{} {} level{}", m_visible.size(),
+                m_kind == levels::Kind::Platformer ? "platformer" : "classic", m_visible.size() == 1 ? "" : "s").c_str());
+        }
     }
 
     if (m_visible.empty()) {
@@ -489,11 +542,23 @@ void SongSelect::applyFilter() {
         return;
     }
     size_t index = 0;
+    bool found = false;
     for (size_t i = 0; i < m_visible.size(); i++) {
         auto const& e = m_entries[m_visible[i]];
-        if (e.id == keepId && e.official == keepOfficial) {
+        if (e.id == keepId && e.official == keepOfficial && e.packHeader == keepHeader) {
             index = i;
+            found = true;
             break;
+        }
+    }
+    // Gone (a pack closed on its level): its header, if it's showing.
+    if (!found && packMode() && m_expandedPack >= 0) {
+        for (size_t i = 0; i < m_visible.size(); i++) {
+            auto const& e = m_entries[m_visible[i]];
+            if (e.packHeader && e.pack == m_expandedPack) {
+                index = i;
+                break;
+            }
         }
     }
     m_hasSelection = false; // force the selection to refresh
@@ -504,11 +569,212 @@ void SongSelect::reloadEntries() {
     // Entry indices change: no panel can be reused.
     for (auto& [index, panel] : m_panels) panel.root->removeFromParent();
     m_panels.clear();
-    m_entries = levels::all(m_kind);
+    if (packMode()) {
+        for (auto& p : packs::all()) packs::refresh(p);
+        rebuildPackEntries();
+        m_hasSelection = false; // the old rows are gone: found again by ID
+    } else {
+        m_entries = levels::all(m_kind);
+    }
     applyFilter();
 }
 
+// --- map packs ---
+
+void SongSelect::rebuildPackEntries() {
+    // Panels keep going across the rebuild: each one's entry is found again
+    // (a pack's header by pack, a level by ID), so nothing fades in twice.
+    struct Key { bool header; int pack; int id; };
+    std::unordered_map<size_t, Key> keys;
+    for (auto& [index, panel] : m_panels) {
+        if (panel.entry < m_entries.size()) {
+            auto const& e = m_entries[panel.entry];
+            keys.emplace(index, Key {e.packHeader, e.pack, e.id});
+        }
+    }
+    m_entries.clear();
+    auto& packs = packs::all();
+    for (size_t i = 0; i < packs.size(); i++) {
+        auto const& p = packs[i];
+        levels::Entry h;
+        h.packHeader = true;
+        h.pack = static_cast<int>(i);
+        h.id = p.id;
+        h.name = p.name;
+        h.creator = "RobTop";
+        h.difficulty = p.difficulty;
+        h.stars = p.stars;
+        h.coins = p.coins;
+        h.coinsVerified = true;
+        int total = static_cast<int>(p.levelIDs.size());
+        h.normalPercent = total > 0 ? p.completed * 100 / total : 0;
+        h.search = p.search;
+        h.resolved = true;
+        m_entries.push_back(std::move(h));
+        for (auto const& level : p.levels) {
+            auto e = level;
+            e.pack = static_cast<int>(i);
+            m_entries.push_back(std::move(e));
+        }
+    }
+    for (auto it = m_panels.begin(); it != m_panels.end();) {
+        auto key = keys.find(it->first);
+        size_t found = SIZE_MAX;
+        if (key != keys.end()) {
+            for (size_t j = 0; j < m_entries.size(); j++) {
+                auto const& e = m_entries[j];
+                if (e.packHeader == key->second.header && e.pack == key->second.pack && e.id == key->second.id) {
+                    found = j;
+                    break;
+                }
+            }
+        }
+        if (found == SIZE_MAX) {
+            it->second.root->removeFromParent();
+            it = m_panels.erase(it);
+        } else {
+            it->second.entry = found;
+            ++it;
+        }
+    }
+}
+
+void SongSelect::onPacksChanged() {
+    if (!packMode() || m_starting) return;
+    // The list comes a page at a time: it shows once it's all here, so the
+    // screen doesn't build and fade in again with every page.
+    if (packs::state() == packs::State::Loading) {
+        if (m_countLabel) {
+            size_t n = packs::all().size();
+            m_countLabel->setString(fmt::format("{} map pack{} so far", n, n == 1 ? "" : "s").c_str());
+        }
+        return;
+    }
+    // The rows are rebuilt: the selection is found again by ID (select()
+    // keeps it in remembered()).
+    rebuildPackEntries();
+    m_hasSelection = false;
+    applyFilter();
+    restoreExpandedPack();
+}
+
+void SongSelect::restoreExpandedPack() {
+    if (packs::state() != packs::State::Loaded) return;
+    auto& packs = packs::all();
+    if (m_expandedPack >= static_cast<int>(packs.size())) m_expandedPack = -1;
+    if (m_expandedPack < 0) {
+        // The pack open last time stays open.
+        int wanted = remembered().expandedPack;
+        for (size_t i = 0; i < packs.size() && wanted >= 0; i++) {
+            if (packs[i].id != wanted) continue;
+            m_expandedPack = static_cast<int>(i);
+            m_hasSelection = false; // its levels go under it: the rows change
+            applyFilter();
+            break;
+        }
+        if (m_expandedPack < 0) return;
+    }
+    auto& p = packs[m_expandedPack];
+    if (p.state == packs::State::Loaded) {
+        // Its levels are here: on to the first one still to beat.
+        if (auto e = selectedEntry(); e && e->packHeader && e->pack == m_expandedPack) selectPackLevel();
+    } else if (p.state == packs::State::Unloaded) {
+        // Not fetched yet (or its request had to wait for another pack's).
+        packs::loadLevels(m_expandedPack);
+    }
+}
+
+void SongSelect::expandPack(int pack) {
+    if (!packMode()) return;
+    auto& packs = packs::all();
+    if (pack >= static_cast<int>(packs.size())) pack = -1;
+    int was = m_expandedPack;
+    if (pack == was) return;
+    m_expandedPack = pack;
+    auto& r = remembered();
+    r.expandedPack = pack >= 0 ? packs[pack].id : -1;
+    // The selection moves to the pack's header (its levels follow), or to
+    // the header of the pack that closed.
+    int header = pack >= 0 ? pack : was;
+    if (header >= 0) {
+        r.selectedId = packs[header].id;
+        r.selectedOfficial = false;
+        r.selectedHeader = true;
+    }
+    m_hasSelection = false;
+    applyFilter();
+    if (pack < 0) return;
+    auto& p = packs[pack];
+    if (p.state == packs::State::Loaded) selectPackLevel();
+    else if (p.state != packs::State::Loading) packs::loadLevels(pack);
+}
+
+void SongSelect::selectPackLevel() {
+    size_t first = SIZE_MAX;
+    for (size_t v = 0; v < m_visible.size(); v++) {
+        auto const& e = m_entries[m_visible[v]];
+        if (e.packHeader || e.pack != m_expandedPack) continue;
+        if (first == SIZE_MAX) first = v;
+        if (e.normalPercent < 100) {
+            first = v;
+            break;
+        }
+    }
+    if (first != SIZE_MAX) select(first);
+}
+
+void SongSelect::claimPack(int pack) {
+    auto& packs = packs::all();
+    if (pack < 0 || pack >= static_cast<int>(packs.size()) || !packs::canClaim(packs[pack])) return;
+    auto& p = packs[pack];
+    packs::claim(p);
+    sfx::play(sfx::sound::DIALOG_OK_SELECT);
+    Dialog::show(icon::GIFT, "Map pack complete!",
+        fmt::format("{} gave you {} star{} and {} coin{}.", p.name, p.stars, p.stars == 1 ? "" : "s",
+                    p.coins, p.coins == 1 ? "" : "s"),
+        {{"Nice", Dialog::Kind::Ok, nullptr}});
+    // The header's progress and its reward chip change.
+    rebuildPackEntries();
+    m_hasSelection = false;
+    applyFilter();
+}
+
+levels::Entry const* SongSelect::selectedEntry() const {
+    if (!m_hasSelection || m_selected >= m_visible.size() || m_visible[m_selected] >= m_entries.size()) return nullptr;
+    return &m_entries[m_visible[m_selected]];
+}
+
+// Rows follow one another with osu!'s spacing, and the open pack stands
+// apart with room above it and below its last level (osu! gives its expanded
+// set twice the spacing; more here, so the open one is plain to see).
+void SongSelect::layoutRows() {
+    m_rowTops.assign(m_visible.size() + 1, 0.f);
+    float y = 0;
+    for (size_t i = 0; i < m_visible.size(); i++) {
+        if (i > 0) {
+            auto const& above = m_entries[m_visible[i - 1]];
+            auto const& row = m_entries[m_visible[i]];
+            bool opening = row.packHeader && row.pack == m_expandedPack;
+            bool closing = !above.packHeader && above.pack >= 0 && row.packHeader;
+            y += (opening || closing) ? PACK_OPEN_GAP * m_k : m_spacing;
+        }
+        m_rowTops[i] = y;
+        y += rowHeight(i);
+    }
+    m_rowTops[m_visible.size()] = y;
+}
+
+float SongSelect::rowHeight(size_t visibleIndex) const {
+    if (packMode() && visibleIndex < m_visible.size()) {
+        auto const& e = m_entries[m_visible[visibleIndex]];
+        if (e.packHeader) return PACK_HEADER_HEIGHT * m_k;
+        if (e.pack >= 0) return PACK_LEVEL_HEIGHT * m_k;
+    }
+    return m_panelH;
+}
+
 float SongSelect::itemTop(size_t visibleIndex) const {
+    if (visibleIndex < m_rowTops.size()) return m_rowTops[visibleIndex];
     return visibleIndex * (m_panelH + m_spacing);
 }
 
@@ -523,7 +789,7 @@ void SongSelect::select(size_t visibleIndex, bool scroll) {
     m_selected = visibleIndex;
     m_hasSelection = true;
 
-    if (scroll) m_scrollTarget = itemTop(visibleIndex) + m_panelH / 2 - viewHeight() / 2;
+    if (scroll) m_scrollTarget = itemTop(visibleIndex) + rowHeight(visibleIndex) / 2 - viewHeight() / 2;
     if (!changed) return;
 
     // Song and coins for the details, the preview and play.
@@ -531,6 +797,7 @@ void SongSelect::select(size_t visibleIndex, bool scroll) {
     auto const& e = m_entries[m_visible[visibleIndex]];
     remembered().selectedId = e.id;
     remembered().selectedOfficial = e.official;
+    remembered().selectedHeader = e.packHeader;
     updateWedge();
     m_previewDelay = PREVIEW_DELAY;
 
@@ -578,8 +845,20 @@ bool SongSelect::selectSong(std::string const& path, int songID) {
 }
 
 void SongSelect::selectRandom() {
-    if (m_visible.size() < 2) return;
     static std::mt19937 rng {std::random_device {}()};
+    if (packMode()) {
+        // Another pack, opened.
+        std::vector<int> others;
+        for (size_t v : m_visible) {
+            auto const& e = m_entries[v];
+            if (e.packHeader && e.pack != m_expandedPack) others.push_back(e.pack);
+        }
+        if (others.empty()) return;
+        sfx::play(sfx::sound::DEFAULT_SELECT);
+        expandPack(others[std::uniform_int_distribution<size_t>(0, others.size() - 1)(rng)]);
+        return;
+    }
+    if (m_visible.size() < 2) return;
     size_t index = std::uniform_int_distribution<size_t>(0, m_visible.size() - 2)(rng);
     if (index >= m_selected) index++;
     sfx::play(sfx::sound::DEFAULT_SELECT);
@@ -600,8 +879,8 @@ void SongSelect::restorePreview() {
 void SongSelect::openLevelPage() {
     if (!m_hasSelection) return;
     auto const& e = m_entries[m_visible[m_selected]];
-    // RobTop's levels have no level page: straight into the level.
-    if (e.official) {
+    // RobTop's levels have no level page: straight into the level. A pack opens.
+    if (e.official || e.packHeader || !e.level) {
         start();
         return;
     }
@@ -694,6 +973,7 @@ void SongSelect::update(float dt) {
     updateScrollbar(dt);
 
     m_wedgeAlpha.update(dt);
+    if (m_loadingSpinner) m_loadingSpinner->setRotation(m_loadingSpinner->getRotation() + dt * 300.f);
     m_wedge->setPositionX(-24 * m_k * (1.f - m_wedgeAlpha.get()));
 
     if (m_previewDelay >= 0) {
@@ -847,7 +1127,14 @@ void SongSelect::ccTouchEnded(CCTouch* touch, CCEvent*) {
     }
 
     size_t index = panelAt(loc);
-    if (index == SIZE_MAX) return;
+    if (index == SIZE_MAX || index >= m_visible.size()) return;
+    auto const& row = m_entries[m_visible[index]];
+    // A pack opens on a click and closes on another, like osu!'s beatmap sets.
+    if (row.packHeader) {
+        sfx::play(sfx::sound::DEFAULT_SELECT);
+        expandPack(row.pack == m_expandedPack ? -1 : row.pack);
+        return;
+    }
     // Clicking the selected level plays it, like osu!.
     if (m_hasSelection && index == m_selected) {
         start();
@@ -874,18 +1161,19 @@ void SongSelect::keyDown(enumKeyCodes key, double timestamp) {
     if (Dialog::isOpen() || g_overlayOpen) return;
     // GD's CCLayer::keyDown turns Escape into keyBackClicked: let it through.
     if (!m_hasSelection || m_starting) return CCLayer::keyDown(key, timestamp);
+    // Stepping onto a closed pack opens it (osu! moves through the sets' difficulties).
+    auto step = [this](size_t to) {
+        sfx::play(sfx::sound::DEFAULT_HOVER);
+        auto const& e = m_entries[m_visible[to]];
+        if (e.packHeader && e.pack != m_expandedPack) expandPack(e.pack);
+        else select(to);
+    };
     switch (key) {
         case KEY_Up:
-            if (m_selected > 0) {
-                sfx::play(sfx::sound::DEFAULT_HOVER);
-                select(m_selected - 1);
-            }
+            if (m_selected > 0) step(m_selected - 1);
             break;
         case KEY_Down:
-            if (m_selected + 1 < m_visible.size()) {
-                sfx::play(sfx::sound::DEFAULT_HOVER);
-                select(m_selected + 1);
-            }
+            if (m_selected + 1 < m_visible.size()) step(m_selected + 1);
             break;
         case KEY_Enter:
             start();

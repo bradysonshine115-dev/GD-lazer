@@ -31,7 +31,14 @@ struct Entry {
     int folder = 0;            // GD's saved-level folder (0 = none)
     std::string search;        // lower-cased name, creator and song, for filtering
     bool resolved = false;     // songPath and coinsCollected filled in
+    // Map packs (Kind::MapPacks): a pack's header row (level is null, name is
+    // the pack's) or one of its levels, both with the pack's index.
+    int pack = -1;
+    bool packHeader = false;
 };
+
+// An entry for any level object (a pack's levels, fetched online).
+Entry fromLevel(GJGameLevel* level, bool official);
 
 // all() only reads what filtering and sorting need, so song select opens fast
 // with thousands of saved levels. Whether the song is downloaded (a file check
@@ -40,7 +47,8 @@ struct Entry {
 void resolve(Entry& entry);
 
 // GD 2.2 has two kinds of level: classic (stars) and platformer (moons).
-enum class Kind { Classic, Platformer };
+// MapPacks: RobTop's map packs, each a header with its levels under it.
+enum class Kind { Classic, Platformer, MapPacks };
 
 // RobTop's levels of that kind in order, then every saved online level of that kind.
 // Classic: the main levels. Platformer: the Tower's levels (vanilla hides them

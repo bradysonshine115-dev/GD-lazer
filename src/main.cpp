@@ -450,7 +450,11 @@ class $modify(LazerMenuLayer, MenuLayer) {
             };
         };
         toolbar->addLeft({lazer::makeIcon(icon::FIST, 1), "gauntlets", hub(&CreatorLayer::onGauntlets)});
-        toolbar->addLeft({lazer::makeIcon(icon::BOXES, 1), "map packs", hub(&CreatorLayer::onMapPacks)});
+        // Map packs open as song select's pack list; back from it lands on the menu you left.
+        toolbar->addLeft({lazer::makeIcon(icon::BOXES, 1), "map packs", [this] {
+            g_returnState = m_fields->buttons ? m_fields->buttons->getState() : ButtonSystem::State::TopLevel;
+            showScene(lazer::SongSelect::scene(lazer::levels::Kind::MapPacks));
+        }});
 
         buttons->setStateCallback([toolbar](ButtonSystem::State state) {
             // Back in a menu: nothing left to restore on the next menu load.

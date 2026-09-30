@@ -15,8 +15,14 @@ SongSelect::Panel& SongSelect::makePanel(size_t visibleIndex) {
     float k = m_k;
     levels::resolve(m_entries[m_visible[visibleIndex]]); // coins for the info row
     auto const& e = m_entries[m_visible[visibleIndex]];
-    float pw = m_rightW + 60 * k, ph = m_panelH;
-    auto accent = levels::difficultyColor(e.difficulty);
+    float pw = m_rightW + 60 * k, ph = rowHeight(visibleIndex);
+    // Pack mode: a pack's header row (osu!'s set panel), or one of its levels,
+    // a shorter row (PanelBeatmap) under the open header.
+    bool header = e.packHeader;
+    bool compact = packMode() && !header;
+    auto pack = packOf(e);
+    auto accent = header && pack ? pack->barColor : levels::difficultyColor(e.difficulty);
+    float stripW = (compact ? PACK_STRIP_WIDTH : STRIP_WIDTH) * k;
 
     // Fades in as a whole: its parts follow its opacity.
     auto root = CCNodeRGBA::create();
@@ -26,63 +32,183 @@ SongSelect::Panel& SongSelect::makePanel(size_t visibleIndex) {
     root->setAnchorPoint({0, 0.5f});
     m_carousel->addChild(root);
 
-    auto bg = RoundedBox::create({pw, ph}, CORNER * k, PANEL_BG);
+    // A pack's levels are darker rows under it.
+    ccColor4B base = compact ? PACK_LEVEL_BG : PANEL_BG;
+    auto bg = RoundedBox::create({pw, ph}, CORNER * k, base);
     bg->setAnchorPoint({0, 0});
     root->addChild(bg, 0);
 
-    // Thumbnail on the right, fading into the panel (PanelSetBackground).
-    auto thumb = RoundedBox::create({pw * 0.62f, ph}, CORNER * k, {255, 255, 255, 255});
-    thumb->setCornerRadii(0, CORNER * k, 0, CORNER * k);
-    thumb->setAnchorPoint({0, 0});
-    thumb->setPosition({pw * 0.38f, 0});
-    thumb->setOpacity(0);
-    thumb->setVisible(false);
-    root->addChild(thumb, 1);
-    auto fade = CascadingGradient::create({PANEL_BG.r, PANEL_BG.g, PANEL_BG.b, 255}, {PANEL_BG.r, PANEL_BG.g, PANEL_BG.b, 0}, {1, 0});
+    // Thumbnail on the right, fading into the panel (PanelSetBackground). A
+    // pack shows every one of its levels' pictures side by side.
+    RoundedBox* thumb = nullptr;
+    std::vector<Panel::Tile> tiles;
+    float thumbX = pw * 0.38f;
+    if (header && pack && !pack->levelIDs.empty()) {
+        size_t n = std::min<size_t>(pack->levelIDs.size(), 5);
+        float gap = 2 * k;
+        float tileW = (pw - thumbX - gap * (n - 1)) / n;
+        for (size_t i = 0; i < n; i++) {
+            bool lastTile = i + 1 == n;
+            auto tile = RoundedBox::create({tileW, ph}, CORNER * k, {255, 255, 255, 255});
+            tile->setCornerRadii(0, lastTile ? CORNER * k : 0, 0, lastTile ? CORNER * k : 0);
+            tile->setAnchorPoint({0, 0});
+            tile->setPosition({thumbX + i * (tileW + gap), 0});
+            tile->setOpacity(0);
+            tile->setVisible(false);
+            root->addChild(tile, 1);
+            tiles.push_back({tile, pack->levelIDs[i]});
+        }
+    } else {
+        thumb = RoundedBox::create({pw - thumbX, ph}, CORNER * k, {255, 255, 255, 255});
+        thumb->setCornerRadii(0, CORNER * k, 0, CORNER * k);
+        thumb->setAnchorPoint({0, 0});
+        thumb->setPosition({thumbX, 0});
+        thumb->setOpacity(0);
+        thumb->setVisible(false);
+        root->addChild(thumb, 1);
+    }
+    auto fade = CascadingGradient::create({base.r, base.g, base.b, 255}, {base.r, base.g, base.b, 0}, {1, 0});
     fade->setContentSize({pw * 0.3f, ph});
-    fade->setPosition({pw * 0.38f, 0});
+    fade->setPosition({thumbX, 0});
     root->addChild(fade, 2);
+    if (header) {
+        // A wash of the pack's colour behind its name, so a pack reads as one.
+        auto wash = CascadingGradient::create({accent.r, accent.g, accent.b, 60}, {accent.r, accent.g, accent.b, 0}, {1, 0});
+        wash->setContentSize({pw * 0.45f, ph});
+        root->addChild(wash, 2);
+    }
 
-    // Difficulty strip.
-    auto strip = RoundedBox::create({STRIP_WIDTH * k, ph}, CORNER * k, {accent.r, accent.g, accent.b, 255});
+    // Difficulty strip (a pack's, in its bar colour).
+    auto strip = RoundedBox::create({stripW, ph}, CORNER * k, {accent.r, accent.g, accent.b, 255});
     strip->setCornerRadii(CORNER * k, 0, CORNER * k, 0);
     strip->setAnchorPoint({0, 0});
     root->addChild(strip, 3);
-    auto face = difficultyFace(e, ph * 0.56f);
-    face->setPosition({STRIP_WIDTH * k / 2, ph * 0.6f});
-    root->addChild(face, 4);
-    if (e.stars > 0) {
-        auto stars = infoRow({{rewardIcon(e), std::to_string(e.stars)}}, 12 * k, {255, 255, 255});
-        stars->setPosition({(STRIP_WIDTH * k - stars->getContentSize().width + 10 * k) / 2, ph * 0.17f});
-        root->addChild(stars, 4);
+    if (compact) {
+        auto face = difficultyFace(e, ph * 0.62f);
+        face->setPosition({stripW / 2, ph / 2});
+        root->addChild(face, 4);
+    } else {
+        auto face = difficultyFace(e, ph * 0.56f);
+        face->setPosition({stripW / 2, ph * 0.6f});
+        root->addChild(face, 4);
+        if (e.stars > 0) {
+            // A pack's stars are what finishing it gives.
+            auto stars = infoRow({{rewardIcon(e), (header ? "+" : "") + std::to_string(e.stars)}}, 12 * k, {255, 255, 255});
+            stars->setPosition({(stripW - stars->getContentSize().width + 10 * k) / 2, ph * 0.17f});
+            root->addChild(stars, 4);
+        }
     }
 
-    float x = STRIP_WIDTH * k + 14 * k;
+    float x = stripW + 14 * k;
     float maxW = pw * 0.62f - x;
-    auto title = makeText(e.name, Weight::SemiBold, 22 * k);
-    title->setAnchorPoint({0, 0.5f});
-    title->setPosition({x, ph * 0.72f});
-    fit(title, maxW);
-    root->addChild(title, 4);
+    CCLabelBMFont* chevron = nullptr;
+    if (header) {
+        // The set panel: the pack's name in its own colour, how many of its
+        // levels are done with a bar in the pack's colour, the reward's state,
+        // and a chevron that turns as the pack opens.
+        auto tag = makeText("MAP PACK", Weight::SemiBold, 10 * k);
+        tag->setColor(accent);
+        tag->setAnchorPoint({0, 0.5f});
+        tag->setPosition({x + 1 * k, ph * 0.88f});
+        root->addChild(tag, 4);
+        auto title = makeText(e.name, Weight::SemiBold, 22 * k);
+        title->setColor(pack ? pack->textColor : ccColor3B {255, 255, 255});
+        title->setAnchorPoint({0, 0.5f});
+        title->setPosition({x, ph * 0.66f});
+        fit(title, maxW - 20 * k);
+        root->addChild(title, 4);
 
-    auto creator = makeText("by " + e.creator, Weight::Regular, 14 * k);
-    creator->setColor(theme::CONTENT2);
-    creator->setAnchorPoint({0, 0.5f});
-    creator->setPosition({x, ph * 0.46f});
-    fit(creator, maxW);
-    root->addChild(creator, 4);
+        int total = pack ? static_cast<int>(pack->levelIDs.size()) : 0;
+        int done = pack ? std::min(pack->completed, total) : 0;
+        std::vector<std::pair<char const*, std::string>> info;
+        info.push_back({icon::LAYERS, fmt::format("{} level{}", total, total == 1 ? "" : "s")});
+        info.push_back({total > 0 && done >= total ? icon::CHECK : nullptr, fmt::format("{}/{} done", done, total)});
+        if (e.coins > 0) info.push_back({icon::COINS, "+" + std::to_string(e.coins)});
+        auto row = infoRow(info, 12 * k, theme::LIGHT1);
+        row->setPosition({x, ph * 0.4f});
+        root->addChild(row, 4);
 
-    std::vector<std::pair<char const*, std::string>> info;
-    if (!e.platformer) info.push_back({icon::CLOCK, levels::lengthName(e.length)});
-    if (e.coins > 0) info.push_back({icon::COINS, fmt::format("{}/{}", e.coinsCollected, e.coins)});
-    if (!e.platformer) info.push_back({e.normalPercent >= 100 ? icon::CHECK : nullptr, fmt::format("{}%", e.normalPercent)});
-    else if (e.normalPercent >= 100) info.push_back({icon::CHECK, e.bestTime > 0 ? formatTime(e.bestTime) : "completed"});
-    auto row = infoRow(info, 12 * k, theme::LIGHT1);
-    row->setPosition({x, ph * 0.2f});
-    root->addChild(row, 4);
+        float barW = std::min(maxW - 20 * k, 220 * k);
+        auto track = RoundedBox::create({barW, 5 * k}, 2.5f * k, {255, 255, 255, 40});
+        track->setAnchorPoint({0, 0.5f});
+        track->setPosition({x, ph * 0.17f});
+        root->addChild(track, 4);
+        if (done > 0 && total > 0) {
+            auto fill = RoundedBox::create({barW * done / total, 5 * k}, 2.5f * k, {accent.r, accent.g, accent.b, 255});
+            fill->setAnchorPoint({0, 0.5f});
+            fill->setPosition({x, ph * 0.17f});
+            root->addChild(fill, 4);
+        }
+
+        float cx = pw * 0.66f;
+        auto chevronBg = RoundedBox::create({26 * k, 26 * k}, 13 * k, {0, 0, 0, 120});
+        chevronBg->setPosition({cx, ph / 2});
+        root->addChild(chevronBg, 4);
+        chevron = makeIcon(icon::CHEVRON_DOWN, 14 * k);
+        chevron->setPosition({cx, ph / 2});
+        root->addChild(chevron, 5);
+        if (pack && (packs::canClaim(*pack) || pack->claimed)) {
+            bool claim = packs::canClaim(*pack);
+            auto chip = infoRow({{claim ? icon::GIFT : icon::CHECK, claim ? "reward!" : "claimed"}}, 12 * k,
+                                claim ? ccColor3B {255, 214, 76} : theme::LIGHT1);
+            float chipW = chip->getContentSize().width;
+            float chipX = cx - 22 * k - chipW;
+            // On a dark pill: it sits over the pictures.
+            auto pill = RoundedBox::create({chipW + 8 * k, 22 * k}, 11 * k, {0, 0, 0, 120});
+            pill->setAnchorPoint({0, 0.5f});
+            pill->setPosition({chipX - 10 * k, ph / 2});
+            root->addChild(pill, 4);
+            chip->setPosition({chipX - 4 * k, ph / 2});
+            root->addChild(chip, 5);
+        }
+    } else if (compact) {
+        auto title = makeText(e.name, Weight::SemiBold, 18 * k);
+        title->setAnchorPoint({0, 0.5f});
+        title->setPosition({x, ph * 0.68f});
+        fit(title, maxW);
+        root->addChild(title, 4);
+
+        std::vector<std::pair<char const*, std::string>> info;
+        info.push_back({icon::USER, e.creator});
+        if (!e.platformer) info.push_back({icon::CLOCK, levels::lengthName(e.length)});
+        if (e.coins > 0) info.push_back({icon::COINS, fmt::format("{}/{}", e.coinsCollected, e.coins)});
+        if (!e.platformer) info.push_back({e.normalPercent >= 100 ? icon::CHECK : nullptr, fmt::format("{}%", e.normalPercent)});
+        else if (e.normalPercent >= 100) info.push_back({icon::CHECK, e.bestTime > 0 ? formatTime(e.bestTime) : "completed"});
+        auto row = infoRow(info, 12 * k, theme::LIGHT1);
+        if (row->getContentSize().width > maxW) row->setScale(maxW / row->getContentSize().width);
+        row->setPosition({x, ph * 0.28f});
+        root->addChild(row, 4);
+    } else {
+        auto title = makeText(e.name, Weight::SemiBold, 22 * k);
+        title->setAnchorPoint({0, 0.5f});
+        title->setPosition({x, ph * 0.72f});
+        fit(title, maxW);
+        root->addChild(title, 4);
+
+        auto creator = makeText("by " + e.creator, Weight::Regular, 14 * k);
+        creator->setColor(theme::CONTENT2);
+        creator->setAnchorPoint({0, 0.5f});
+        creator->setPosition({x, ph * 0.46f});
+        fit(creator, maxW);
+        root->addChild(creator, 4);
+
+        std::vector<std::pair<char const*, std::string>> info;
+        if (!e.platformer) info.push_back({icon::CLOCK, levels::lengthName(e.length)});
+        if (e.coins > 0) info.push_back({icon::COINS, fmt::format("{}/{}", e.coinsCollected, e.coins)});
+        if (!e.platformer) info.push_back({e.normalPercent >= 100 ? icon::CHECK : nullptr, fmt::format("{}%", e.normalPercent)});
+        else if (e.normalPercent >= 100) info.push_back({icon::CHECK, e.bestTime > 0 ? formatTime(e.bestTime) : "completed"});
+        auto row = infoRow(info, 12 * k, theme::LIGHT1);
+        row->setPosition({x, ph * 0.2f});
+        root->addChild(row, 4);
+    }
 
     auto& panel = m_panels[visibleIndex];
     panel = Panel {m_visible[visibleIndex], root, bg, thumb};
+    panel.chevron = chevron;
+    panel.tiles = std::move(tiles);
+    panel.base = base;
+    if (header && e.pack == m_expandedPack) panel.expand.set(1.f);
+    if (chevron) chevron->setRotation(-90.f * (1.f - panel.expand.get()));
     panel.appear.to(1.f, PANEL_FADE, Easing::OutQuint);
     return panel;
 }
@@ -102,13 +228,28 @@ void SongSelect::updateCarousel(float dt) {
 
     for (auto& [index, panel] : m_panels) panel.seen = false;
     if (!m_visible.empty()) {
-        int first = std::max(0, static_cast<int>(std::floor((m_scroll - m_panelH) / step)));
-        int last = std::min(static_cast<int>(m_visible.size()) - 1, static_cast<int>(std::ceil((m_scroll + viewH + m_panelH) / step)));
+        int count = static_cast<int>(m_visible.size());
+        int first = 0, last = count - 1;
+        float middle = 0;
+        if (m_rowTops.size() == m_visible.size() + 1) {
+            // Rows can differ in height (packs): the view's edges, and its
+            // middle, found among the row tops.
+            auto rowAt = [&](float y) {
+                auto it = std::upper_bound(m_rowTops.begin(), m_rowTops.end() - 1, y);
+                return std::clamp(static_cast<int>(it - m_rowTops.begin()) - 1, 0, count - 1);
+            };
+            first = rowAt(m_scroll - m_panelH);
+            last = std::min(count - 1, rowAt(m_scroll + viewH + m_panelH) + 1);
+            middle = static_cast<float>(rowAt(m_scroll + halfH));
+        } else {
+            first = std::max(0, static_cast<int>(std::floor((m_scroll - m_panelH) / step)));
+            last = std::min(count - 1, static_cast<int>(std::ceil((m_scroll + viewH + m_panelH) / step)));
+            middle = (m_scroll + halfH - m_panelH / 2) / step;
+        }
         auto mouse = geode::cocos::getMousePos();
         float colLeft = m_win.width - m_rightW;
 
         // Missing panels, a few per frame, from the middle of the view outwards.
-        float middle = (m_scroll + halfH - m_panelH / 2) / step;
         std::vector<int> missing;
         for (int i = first; i <= last; i++) {
             if (!m_panels.contains(i)) missing.push_back(i);
@@ -127,16 +268,23 @@ void SongSelect::updateCarousel(float dt) {
             auto alpha = static_cast<GLubyte>(255 * std::clamp(p.appear.get(), 0.f, 1.f));
             if (p.root->getOpacity() != alpha) p.root->setOpacity(alpha);
 
-            float centerFromTop = itemTop(i) - m_scroll + m_panelH / 2;
+            float centerFromTop = itemTop(i) - m_scroll + rowHeight(i) / 2;
             float y = m_carouselTop - centerFromTop;
             // Carousel.offsetX: panels curve away towards the top and bottom.
             float dist = std::abs(1.f - centerFromTop / halfH);
             float offset = (3.f - std::sqrt(std::max(0.f, 9.f - dist * dist))) * halfH;
 
-            bool selected = m_hasSelection && static_cast<size_t>(i) == m_selected;
+            auto const& e = m_entries[p.entry];
+            bool open = e.packHeader && e.pack == m_expandedPack;
+            bool selected = (m_hasSelection && static_cast<size_t>(i) == m_selected) || open;
             if (p.active.target() != (selected ? 1.f : 0.f)) p.active.to(selected ? 1.f : 0.f, 400, Easing::OutQuint);
-
-            p.root->setPosition({colLeft + offset - p.active.get() * ACTIVE_X * k, y});
+            if (p.chevron && p.expand.target() != (open ? 1.f : 0.f)) p.expand.to(open ? 1.f : 0.f, 400, Easing::OutQuint);
+            // Where a row rests when it isn't the selection: packs sit back,
+            // their levels a little less (Panel.updateXOffset).
+            float rest = 0;
+            if (packMode()) rest = (e.packHeader ? PACK_REST_X : PACK_LEVEL_REST_X) * k;
+            float active = p.active.get();
+            p.root->setPosition({colLeft + offset + rest * (1 - active) - active * ACTIVE_X * k, y});
             bool hovered = !m_dragging && !g_overlayOpen && mouse.y > m_carouselBottom && mouse.y < m_carouselTop
                 && containsWorld(p.root, mouse);
             if (hovered != p.hovered) {
@@ -146,29 +294,42 @@ void SongSelect::updateCarousel(float dt) {
             }
             p.active.update(dt);
             p.hover.update(dt);
-            p.bg->setFillColor(theme::lerp(PANEL_BG, PANEL_HOVER, p.hover.get()));
-            auto const& e = m_entries[p.entry];
-            auto accent = levels::difficultyColor(e.difficulty);
+            p.expand.update(dt);
+            if (p.chevron) p.chevron->setRotation(-90.f * (1.f - p.expand.get()));
+            p.bg->setFillColor(theme::lerp(p.base, PANEL_HOVER, p.hover.get()));
+            auto pack = packOf(e);
+            auto accent = e.packHeader && pack ? pack->barColor : levels::difficultyColor(e.difficulty);
             p.bg->setBorder(2.5f * k * p.active.get(), {accent.r, accent.g, accent.b, static_cast<GLubyte>(255 * p.active.get())});
 
             // Thumbnail, once the panel has settled in view.
             p.visibleMs += ms;
             if (!p.thumbRequested && p.visibleMs > THUMB_DELAY) {
                 p.thumbRequested = true;
-                Ref<RoundedBox> thumb = p.thumb;
-                levelThumbnail(e, [thumb](CCTexture2D* texture) {
-                    if (!texture || !thumb->getParent()) return;
-                    thumb->setTexture(texture);
-                    thumb->setVisible(true);
-                    thumb->setUserObject("loaded"_spr, CCBool::create(true));
-                }, [thumb] {
-                    // Its panel left the view before its turn came: skip it.
-                    return thumb->getParent() != nullptr;
-                });
+                auto onTexture = [](Ref<RoundedBox> box) {
+                    return [box](CCTexture2D* texture) {
+                        if (!texture || !box->getParent()) return;
+                        box->setTexture(texture);
+                        box->setVisible(true);
+                        box->setUserObject("loaded"_spr, CCBool::create(true));
+                    };
+                };
+                // Its panel left the view before its turn came: skip it.
+                auto stillWanted = [](Ref<RoundedBox> box) {
+                    return [box] { return box->getParent() != nullptr; };
+                };
+                if (p.thumb) levelThumbnail(e, onTexture(p.thumb), stillWanted(p.thumb));
+                for (auto& t : p.tiles) thumbnails::fetch(t.levelID, onTexture(t.box), stillWanted(t.box));
             }
-            if (p.thumb->getUserObject("loaded"_spr) && p.thumbAlpha.target() < 1.f) p.thumbAlpha.to(1.f, 300, Easing::OutQuint);
-            p.thumbAlpha.update(dt);
-            p.thumb->setOpacity(static_cast<GLubyte>(p.thumbAlpha.get() * 150));
+            if (p.thumb) {
+                if (p.thumb->getUserObject("loaded"_spr) && p.thumbAlpha.target() < 1.f) p.thumbAlpha.to(1.f, 300, Easing::OutQuint);
+                p.thumbAlpha.update(dt);
+                p.thumb->setOpacity(static_cast<GLubyte>(p.thumbAlpha.get() * 150));
+            }
+            for (auto& t : p.tiles) {
+                if (t.box->getUserObject("loaded"_spr) && t.alpha.target() < 1.f) t.alpha.to(1.f, 300, Easing::OutQuint);
+                t.alpha.update(dt);
+                t.box->setOpacity(static_cast<GLubyte>(t.alpha.get() * 150));
+            }
         }
     }
     for (auto it = m_panels.begin(); it != m_panels.end();) {
@@ -183,8 +344,9 @@ void SongSelect::updateCarousel(float dt) {
 
 std::pair<float, float> SongSelect::scrollRange() const {
     float halfH = viewHeight() / 2;
-    float last = m_visible.empty() ? 0.f : itemTop(m_visible.size() - 1);
-    return {m_panelH / 2 - halfH, last + m_panelH / 2 - halfH};
+    if (m_visible.empty()) return {m_panelH / 2 - halfH, m_panelH / 2 - halfH};
+    size_t last = m_visible.size() - 1;
+    return {rowHeight(0) / 2 - halfH, itemTop(last) + rowHeight(last) / 2 - halfH};
 }
 
 // Length from the visible share of the list (at least three widths, like
@@ -255,10 +417,23 @@ bool SongSelect::scrollbarHit(CCPoint world) const {
 
 std::string SongSelect::scrollbarText() const {
     if (m_visible.empty()) return "";
-    float step = m_panelH + m_spacing;
-    float middle = m_scroll + viewHeight() / 2 - m_panelH / 2;
-    auto index = static_cast<size_t>(std::clamp(std::round(middle / step), 0.f, float(m_visible.size() - 1)));
-    auto const& e = m_entries[m_visible[index]];
+    size_t index;
+    if (m_rowTops.size() == m_visible.size() + 1) {
+        auto it = std::upper_bound(m_rowTops.begin(), m_rowTops.end() - 1, m_scroll + viewHeight() / 2);
+        index = static_cast<size_t>(std::max<std::ptrdiff_t>(0, (it - m_rowTops.begin()) - 1));
+        index = std::min(index, m_visible.size() - 1);
+    } else {
+        float step = m_panelH + m_spacing;
+        float middle = m_scroll + viewHeight() / 2 - m_panelH / 2;
+        index = static_cast<size_t>(std::clamp(std::round(middle / step), 0.f, float(m_visible.size() - 1)));
+    }
+    size_t entry = m_visible[index];
+    if (packMode()) {
+        // A pack's level counts as its pack, and packs go by name.
+        while (entry > 0 && !m_entries[entry].packHeader) entry--;
+        if (m_sort == levels::Sort::Default) return m_entries[entry].name;
+    }
+    auto const& e = m_entries[entry];
     switch (m_sort) {
         case levels::Sort::Title:
             for (char c : e.name) {

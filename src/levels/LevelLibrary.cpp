@@ -109,8 +109,13 @@ namespace {
     }
 }
 
+Entry fromLevel(GJGameLevel* level, bool official) {
+    return make(level, official);
+}
+
 std::vector<Entry> all(Kind kind) {
     std::vector<Entry> entries;
+    if (kind == Kind::MapPacks) return entries; // see MapPacks.hpp
     auto glm = GameLevelManager::sharedState();
     bool platformer = kind == Kind::Platformer;
 

@@ -37,6 +37,16 @@ namespace songselect {
     inline constexpr float FOOTER_HEIGHT = 50;  // ScreenFooter.HEIGHT
     inline constexpr float FILTER_HEIGHT = 96;
     inline constexpr float STRIP_WIDTH = 64;
+    // Map packs: a pack's levels are shorter rows under it (PanelBeatmap is
+    // smaller than PanelBeatmapSet), and rows rest further right the less
+    // they matter (Panel.updateXOffset: collapsed sets sit furthest back).
+    inline constexpr float PACK_HEADER_HEIGHT = 80;
+    inline constexpr float PACK_LEVEL_HEIGHT = 56;
+    inline constexpr float PACK_REST_X = 40;
+    inline constexpr float PACK_LEVEL_REST_X = 30;
+    inline constexpr float PACK_STRIP_WIDTH = 44;
+    inline constexpr float PACK_OPEN_GAP = 18;    // room above an open pack and below its last level
+    inline constexpr ccColor4B PACK_LEVEL_BG {26, 25, 33, 235};
     inline constexpr float SHEAR = 0.2f;        // OsuGame.SHEAR
     inline constexpr float PREVIEW_DELAY = 150; // SongSelect.SELECTION_DEBOUNCE
     inline constexpr float THUMB_DELAY = 150;
@@ -69,6 +79,8 @@ namespace songselect {
         std::string query;
         int selectedId = -1;
         bool selectedOfficial = false;
+        bool selectedHeader = false; // a pack's header row (pack mode)
+        int expandedPack = -1;       // pack ID open in pack mode
     };
     extern levels::Kind g_lastKind;
     Remembered& remembered();
@@ -197,7 +209,7 @@ namespace songselect {
 
     inline CCNode* difficultyFace(levels::Entry const& e, float size) {
         auto face = GJDifficultySprite::create(e.difficulty, GJDifficultyName::Short);
-        if (!e.official) face->updateFeatureState(featureState(e.level));
+        if (!e.official && e.level) face->updateFeatureState(featureState(e.level));
         face->setCascadeOpacityEnabled(true); // the feature glow fades with it
         auto s = face->getContentSize();
         face->setScale(size / std::max(1.f, std::max(s.width, s.height)));
@@ -208,8 +220,22 @@ namespace songselect {
     // online); saved levels come from the Level Thumbnails server.
     inline void levelThumbnail(levels::Entry const& e, std::function<void(CCTexture2D*)> callback,
                         std::function<bool()> wanted = nullptr) {
+        if (e.packHeader) {
+            // A pack has no picture of its own: its first level's stands in.
+            auto& packs = packs::all();
+            if (e.pack < 0 || static_cast<size_t>(e.pack) >= packs.size() || packs[e.pack].levelIDs.empty()) return;
+            thumbnails::fetch(packs[e.pack].levelIDs.front(), std::move(callback), std::move(wanted));
+            return;
+        }
         if (e.official) thumbnails::fetchOfficial(e.id, std::move(callback), std::move(wanted));
         else thumbnails::fetch(e.id, std::move(callback), std::move(wanted));
+    }
+
+    // The pack an entry belongs to (a header, or one of its levels), or null.
+    inline packs::Pack* packOf(levels::Entry const& e) {
+        auto& packs = packs::all();
+        if (e.pack < 0 || static_cast<size_t>(e.pack) >= packs.size()) return nullptr;
+        return &packs[e.pack];
     }
 
     inline bool containsWorld(CCNode* node, CCPoint world) {

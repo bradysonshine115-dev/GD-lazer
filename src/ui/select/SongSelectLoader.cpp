@@ -14,6 +14,12 @@ namespace lazer {
 void SongSelect::start() {
     if (!m_hasSelection || m_starting) return;
     auto const& e = m_entries[m_visible[m_selected]];
+    // A pack opens (or closes) instead of playing.
+    if (e.packHeader) {
+        expandPack(e.pack == m_expandedPack ? -1 : e.pack);
+        return;
+    }
+    if (!e.level) return;
     auto level = e.level;
     int songID = level ? level->m_songID : 0;
     auto songs = MusicDownloadManager::sharedState();
@@ -49,6 +55,7 @@ void SongSelect::start() {
 void SongSelect::play(bool withSong) {
     if (!m_hasSelection || m_starting) return;
     auto const& e = m_entries[m_visible[m_selected]];
+    if (e.packHeader || !e.level) return;
     m_withSong = withSong;
     sfx::play(sfx::sound::MENU_PLAY_SELECT);
     closeFolders();

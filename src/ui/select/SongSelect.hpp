@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../levels/LevelLibrary.hpp"
+#include "../../levels/MapPacks.hpp"
 #include "../core/Easing.hpp"
 #include "../core/RoundedBox.hpp"
 #include "../core/ScrollArea.hpp"
@@ -95,6 +96,18 @@ protected:
         bool seen = false;        // still in view this frame
         float visibleMs = 0;      // thumbnails load once a panel has settled in view
         bool thumbRequested = false;
+        // Pack headers: the chevron turns as the pack opens, and the pictures
+        // of every level in the pack sit side by side.
+        cocos2d::CCLabelBMFont* chevron = nullptr;
+        Tweened<float> expand {0.f};
+        struct Tile {
+            RoundedBox* box;
+            int levelID;
+            Tweened<float> alpha {0.f};
+        };
+        std::vector<Tile> tiles;
+        // A pack's level has its own resting colour.
+        cocos2d::ccColor4B base {36, 34, 44, 235};
     };
 
     struct Button {
@@ -120,6 +133,28 @@ protected:
     void applyFilter();
     // Reads the levels again (after deleting some) and re-applies the filters.
     void reloadEntries();
+    // Map packs (Kind::MapPacks): the packs are the rows, and the open one has
+    // its levels under it, like osu!'s beatmap sets and their difficulties.
+    bool packMode() const { return m_kind == levels::Kind::MapPacks; }
+    // m_entries from the loaded packs: each header followed by its levels.
+    void rebuildPackEntries();
+    // The pack list or a pack's levels arrived (or failed).
+    void onPacksChanged();
+    // Opens a pack (closing any other) and selects its first unbeaten level,
+    // fetching its levels first when needed. -1 closes the open pack.
+    void expandPack(int pack);
+    // GD hands out the pack's stars and coins.
+    void claimPack(int pack);
+    // Selects the open pack's first unbeaten level (or its first).
+    void selectPackLevel();
+    // Opens the pack that was open last time, once the list is here, and
+    // sees to the open pack's levels (fetched, or its first one selected).
+    void restoreExpandedPack();
+    // Row positions (rows differ in height in pack mode).
+    void layoutRows();
+    float rowHeight(size_t visibleIndex) const;
+    // The selected entry, or null.
+    levels::Entry const* selectedEntry() const;
     void select(size_t visibleIndex, bool scroll = true);
     void selectRandom();
     // Play: osu!'s PlayerLoader, then the level.
@@ -195,6 +230,8 @@ protected:
     int m_folder = 0;              // 0 = all folders
     levels::Sort m_sort = levels::Sort::Default;
     std::string m_query;
+    int m_expandedPack = -1;          // pack index whose levels are shown
+    std::vector<float> m_rowTops;     // top of each visible row, then the end
 
     MenuBackground* m_background = nullptr;
     cocos2d::CCNode* m_carousel = nullptr;
@@ -225,6 +262,7 @@ protected:
     geode::TextInput* m_search = nullptr;
     bool m_searchEnabled = true;    // off while an overlay covers song select
     cocos2d::CCLabelBMFont* m_countLabel = nullptr;
+    cocos2d::CCNode* m_loadingSpinner = nullptr;        // in the wedge while the packs load
     cocos2d::CCLabelBMFont* m_sortLabel = nullptr;
     std::vector<Button> m_tabs;
     std::vector<Button> m_buttons; // footer + sort
