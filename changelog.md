@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.6.0
+
+- You're one of few valuable testers: expect rare crashes. A line on the main menu says so. Please report anything that breaks
+- Play, create and browse menus rearranged: daily, weekly and the event level sit together in the play row; gauntlets and map packs are in the toolbar next to home; the right side runs achievements, statistics, leaderboards, quests, paths, then chests, vault and treasure room, then the music player and mods
+- Browse: search, featured, lists, hall of fame, magic, recent and sent open as osu!-style listing pages with level cards, filters, sort tabs and endless scrolling
+- Create: my levels and my lists open as orange pages with cards for each level (song, length, objects, verified / uploaded), folders, search, a new level / new list button and your uploaded levels
+- Comments: a saved level's comments open as an osu!-style page (newest or top, post your own, like or dislike), also from a level's info button, with the level's description, ID and dates on top. Names open the writer's profile
+- Song select opens fast with thousands of saved levels, and a browse button opens online search
+- Playing from song select: the level loads while the loader is on screen, so it starts right after it. The preview picks up where the song was when you come back
+- Leaderboards open as osu!'s rankings page: top 100, friends, global and creators, sorted by stars, moons, demons or user coins, with each player's icon, name and stats
+- Paths open as an osu!-style page: every path with its art, rank and progress, the chosen one with its ten ranks and rewards, unlock, activate and claim its chest
+- GD's shops open as osu!-style pages: your orbs or diamonds in the header, every item as a card with its price and whether you own it, and the shopkeeper still talks
+- Daily chests are a popup instead of a full page: both chests side by side, a ready one opens by itself
+- Pause menu and level complete screen the osu! way (Settings > Lazer UI > Gameplay > "Lazer pause and results", off by default while it's new): continue, retry and quit, practice, the volume sliders, your attempts, jumps, time and rewards, other mods' pause buttons kept
+- Page headers come alive with a wash of the page's colour and osu!'s drifting triangles, and the profile cover uses the player's colours
+- Updates are checked, downloaded and installed in one dialog: changelog, progress bar, restart prompt
+- Exiting the game or a level, graphics options and parental controls open as osu!'s dialogs (PC)
+- The cursor has opinions: shake it fast for a speech bubble, spin it past a full turn and it gets dizzy
+- Icons sit centred in their buttons (the music player's controls and every close button used to sit low)
+- Fixed: crash when playing from song select with Custom Keybinds installed
+- Fixed: crash opening parental controls on Windows
+- Fixed: crash on quit with BetterInfo installed
+- Fixed: black cursor and missing thumbnails after switching fullscreen
+- Fixed: a profile opened from a comment showed behind the page
+
 ## v0.5.6
 
 - Menu sounds have their own volume now: Settings > Audio > Volume > Interface sounds is theirs alone, so with GD's SFX off the menus still make sound
