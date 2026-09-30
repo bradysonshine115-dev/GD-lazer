@@ -392,8 +392,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
                 showScene(lazer::SongSelect::scene(lazer::levels::Kind::Platformer));
             }), true, lazer::sfx::sound::MENU_PLAY_SELECT, State::Play},
             {"daily", icon::CALENDAR_DAY, PLAY_SUB, [] { creatorAction(&CreatorLayer::onDailyLevel); }, false, defaultSound, State::Play},
-            {"gauntlets", icon::FIST, PLAY_SUB, creator(State::Play, &CreatorLayer::onGauntlets), true, defaultSound, State::Play},
-            {"map packs", icon::BOXES, PLAY_SUB, creator(State::Play, &CreatorLayer::onMapPacks), true, defaultSound, State::Play},
+            {"weekly", icon::CALENDAR_WEEK, PLAY_SUB, [] { creatorAction(&CreatorLayer::onWeeklyLevel); }, false, defaultSound, State::Play},
 
             // create: your own levels
             {"my levels", icon::FOLDER_OPEN, {238, 170, 0}, creator(State::Create, &CreatorLayer::onMyLevels), true, defaultSound, State::Create},
@@ -442,6 +441,16 @@ class $modify(LazerMenuLayer, MenuLayer) {
         toolbar->addLeft({lazer::makeIcon(icon::HOUSE, 1), "home", [this, buttons] {
             if (!this->closeAllOverlays()) buttons->back();
         }});
+        // GD's level collections, from the creator hub; back from them lands on the menu you left.
+        auto hub = [this](void (CreatorLayer::*handler)(CCObject*)) {
+            return [this, handler] {
+                g_returnState = m_fields->buttons ? m_fields->buttons->getState() : ButtonSystem::State::TopLevel;
+                creatorAction(handler);
+            };
+        };
+        toolbar->addLeft({lazer::makeIcon(icon::FIST, 1), "gauntlets", hub(&CreatorLayer::onGauntlets)});
+        toolbar->addLeft({lazer::makeIcon(icon::BOXES, 1), "map packs", hub(&CreatorLayer::onMapPacks)});
+        toolbar->addLeft({lazer::makeIcon(icon::BOLT, 1), "event level", hub(&CreatorLayer::onEventLevel)});
 
         buttons->setStateCallback([toolbar](ButtonSystem::State state) {
             // Back in a menu: nothing left to restore on the next menu load.
@@ -551,9 +560,28 @@ class $modify(LazerMenuLayer, MenuLayer) {
         bg->setOrderOfArrival(source->getOrderOfArrival());
     }
 
+    // Right side of the toolbar, left to right: the player's pages first
+    // (achievements, statistics, leaderboards, quests, paths), then rewards and
+    // secrets, then the music player, then mods, then anything unknown.
+    static int rightOrder(std::string const& id) {
+        static std::unordered_map<std::string, int> const order {
+            {"achievements-button", 0}, {"stats-button", 1}, {"leaderboards", 2}, {"quests", 3}, {"paths", 4},
+            {"daily-chest-button", 10}, {"vault", 11}, {"treasure-room", 12},
+            {"newgrounds-button", 20},
+            {"geode.loader/geode-button", 30}, {"dankmeme.globed2/main-menu-button", 31},
+        };
+        auto it = order.find(id);
+        return it != order.end() ? it->second : 40;
+    }
+
     void collectToolbarButtons() {
         auto toolbar = m_fields->toolbar;
         if (!toolbar) return;
+        // Gathered first, then added in a fixed order (see rightOrder).
+        std::vector<std::pair<int, lazer::Toolbar::Item>> right;
+        auto add = [&](std::string const& id, lazer::Toolbar::Item item) {
+            right.push_back({rightOrder(id), std::move(item)});
+        };
 
         for (auto menuId : TOOLBAR_SOURCE_MENUS) {
             auto menu = this->getChildByID(menuId);
@@ -587,7 +615,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
                 if (id == "newgrounds-button" && Mod::get()->getSettingValue<bool>("music-player")) {
                     action = [this] { this->toggleNowPlaying(); };
                 }
-                toolbar->addRight({iconNode, tooltip, action});
+                add(id, {iconNode, tooltip, action});
             }
             menu->setVisible(false);
         }
@@ -599,25 +627,25 @@ class $modify(LazerMenuLayer, MenuLayer) {
                 creatorAction(handler);
             };
         };
-        toolbar->addRight({lazer::makeIcon(icon::RANKING_STAR, 1), "leaderboards", [this] { this->toggleLeaderboards(); }});
-        toolbar->addRight({lazer::makeIcon(icon::LIST_CHECK, 1), "quests", [this] { this->toggleQuests(); }});
-        toolbar->addRight({lazer::makeIcon(icon::ROUTE, 1), "paths", [this] { this->togglePaths(); }});
-        toolbar->addRight({lazer::makeIcon(icon::CALENDAR_WEEK, 1), "weekly demon", hub(&CreatorLayer::onWeeklyLevel)});
-        toolbar->addRight({lazer::makeIcon(icon::BOLT, 1), "event level", hub(&CreatorLayer::onEventLevel)});
-        toolbar->addRight({lazer::makeIcon(icon::VAULT, 1), "vault", hub(&CreatorLayer::onSecretVault)});
-        toolbar->addRight({lazer::makeIcon(icon::DUNGEON, 1), "treasure room", hub(&CreatorLayer::onTreasureRoom)});
+        add("leaderboards", {lazer::makeIcon(icon::RANKING_STAR, 1), "leaderboards", [this] { this->toggleLeaderboards(); }});
+        add("quests", {lazer::makeIcon(icon::LIST_CHECK, 1), "quests", [this] { this->toggleQuests(); }});
+        add("paths", {lazer::makeIcon(icon::ROUTE, 1), "paths", [this] { this->togglePaths(); }});
+        add("vault", {lazer::makeIcon(icon::VAULT, 1), "vault", hub(&CreatorLayer::onSecretVault)});
+        add("treasure-room", {lazer::makeIcon(icon::DUNGEON, 1), "treasure room", hub(&CreatorLayer::onTreasureRoom)});
 
         // Other mods' creator hub buttons.
         if (auto scanned = Ref(CreatorLayer::create())) {
             for (auto& button : scanCreatorModButtons(scanned)) {
                 log::debug("Creator hub mod button: {}", button.id);
                 auto iconNode = button.image ? lazer::snapshotNode(button.image) : nullptr;
-                toolbar->addRight({iconNode, button.id.empty() ? "" : prettyId(button.id), [this, path = button.path] {
+                add(button.id, {iconNode, button.id.empty() ? "" : prettyId(button.id), [this, path = button.path] {
                     g_returnState = m_fields->buttons ? m_fields->buttons->getState() : ButtonSystem::State::TopLevel;
                     creatorModAction(path);
                 }});
             }
         }
+        std::stable_sort(right.begin(), right.end(), [](auto& a, auto& b) { return a.first < b.first; });
+        for (auto& [_, item] : right) toolbar->addRight(std::move(item));
 
         // Profile: the vanilla button lives in profile-menu (or main-menu on some setups).
         CCMenuItem* profile = nullptr;
