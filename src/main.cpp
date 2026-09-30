@@ -468,6 +468,14 @@ class $modify(LazerMenuLayer, MenuLayer) {
         this->addChild(ticker, 12);
         m_fields->ticker = ticker;
 
+        // A word to the testers along the bottom edge (osu!'s development build notice).
+        auto notice = lazer::makeText("You're one of few valuable testers, expect rare crashes", lazer::Weight::Regular, 10 * k);
+        notice->setColor({255, 255, 255});
+        notice->setOpacity(150);
+        notice->setPosition({win.width / 2, 8 * k});
+        notice->setID("tester-notice"_spr);
+        this->addChild(notice, 12);
+
         // Follow the music: new song -> ticker + that level's thumbnail as the background.
         this->addChild(lazer::MusicListener::create([this](auto track, auto) { this->onTrackChanged(track); }));
         if (lazer::MusicPlayer::get().isActive()) this->onTrackChanged(lazer::MusicPlayer::get().current());
