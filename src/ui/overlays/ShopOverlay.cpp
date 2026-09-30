@@ -1,6 +1,7 @@
 #include "ShopOverlay.hpp"
 
 #include "../../audio/Sfx.hpp"
+#include "../core/Quips.hpp"
 #include "../core/Text.hpp"
 #include "GameplayButtons.hpp"
 
@@ -371,6 +372,7 @@ void ShopOverlay::select(Item const& item) {
         return;
     }
     if (auto popup = PurchaseItemPopup::create(item.item.data())) {
+        quips::say("shop", 0.5f);
         popup->m_delegate = m_shop;
         popup->show();
     }

@@ -1,5 +1,6 @@
 #include "ButtonSystem.hpp"
 
+#include "../core/Quips.hpp"
 #include "../core/Text.hpp"
 #include "../core/Theme.hpp"
 
@@ -132,6 +133,8 @@ MenuButton* ButtonSystem::makeButton(ButtonDef const& def, float width) {
 
 void ButtonSystem::onLogoClicked() {
     if (m_exiting) return;
+    // Poked over and over: it minds.
+    if (quips::spam("logo", 5, 3.f)) quips::say("logo-poke");
     if (m_state == State::Initial) {
         sfx::play(sfx::sound::LOGO_SELECT);
         setState(State::TopLevel);

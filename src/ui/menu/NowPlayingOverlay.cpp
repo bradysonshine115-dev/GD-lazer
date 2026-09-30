@@ -1,6 +1,7 @@
 #include "NowPlayingOverlay.hpp"
 
 #include "../../audio/Sfx.hpp"
+#include "../core/Quips.hpp"
 #include "../../integrations/LevelThumbnails.hpp"
 #include "../core/Text.hpp"
 #include "../core/Theme.hpp"
@@ -104,7 +105,11 @@ bool NowPlayingOverlay::init(float toolbarHeight) {
     m_playButton = m_buttons.size();
     addButton(icon::CIRCLE_PLAY, cx, playSize, 1.4f, [] { MusicPlayer::get().togglePause(); });
     addButton(icon::STEP_FORWARD, cx + playSize * k / 2 + gap + BUTTON_SIZE * k / 2, BUTTON_SIZE, 1.f,
-              [] { MusicPlayer::get().next(); });
+              [] {
+                  MusicPlayer::get().next();
+                  // Skipping song after song: the cursor has taste too.
+                  if (quips::spam("music-skip", 4, 10.f)) quips::say("music-skip");
+              });
     m_shuffleButton = m_buttons.size();
     addButton(icon::SHUFFLE, bandH / 2, BUTTON_SIZE, 1.f, [] { MusicPlayer::get().toggleShuffle(); });
     m_buttons[m_shuffleButton].active = player.shuffle();

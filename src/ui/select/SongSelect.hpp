@@ -243,8 +243,7 @@ protected:
     // The cursor comments on a fruitless search once you've stopped typing.
     float m_noResultsMs = -1;
     std::string m_saidFor;
-    // ...and on hammering random.
-    std::vector<float> m_randomPresses;
+
 
     MenuBackground* m_background = nullptr;
     cocos2d::CCNode* m_carousel = nullptr;

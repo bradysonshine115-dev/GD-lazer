@@ -5,6 +5,7 @@
 
 #include "audio/MusicPlayer.hpp"
 #include "audio/Sfx.hpp"
+#include "ui/core/Quips.hpp"
 #include "integrations/LevelThumbnails.hpp"
 #include "integrations/ModIntegrations.hpp"
 #include "settings/Account.hpp"
@@ -378,9 +379,18 @@ class $modify(LazerMenuLayer, MenuLayer) {
             {"settings", icon::GEAR, {85, 85, 85}, [this] { this->toggleSettings(); }, false, defaultSound, State::TopLevel, true},
 
             {"play", icon::PLAY, {102, 68, 204}, open(State::Play), false, lazer::sfx::sound::MENU_PLAY_SELECT},
-            {"create", icon::PEN, {238, 170, 0}, open(State::Create), false, lazer::sfx::sound::MENU_PLAY_SELECT},
-            {"browse", icon::COMPASS, {165, 204, 0}, open(State::Browse), false},
-            {"icons", icon::SHIRT, {0, 160, 200}, leave(State::TopLevel, [this] { this->onGarage(nullptr); })},
+            {"create", icon::PEN, {238, 170, 0}, [this] {
+                lazer::quips::say("create", 0.2f);
+                if (m_fields->buttons) m_fields->buttons->setState(State::Create);
+            }, false, lazer::sfx::sound::MENU_PLAY_SELECT},
+            {"browse", icon::COMPASS, {165, 204, 0}, [this] {
+                lazer::quips::say("browse", 0.2f);
+                if (m_fields->buttons) m_fields->buttons->setState(State::Browse);
+            }, false},
+            {"icons", icon::SHIRT, {0, 160, 200}, leave(State::TopLevel, [this] {
+                lazer::quips::say("icons", 0.5f);
+                this->onGarage(nullptr);
+            })},
             {"exit", icon::CIRCLE_XMARK, {238, 51, 153}, [this] { this->onQuit(this); }, false},
 
             // play: everything you can play right away
@@ -391,9 +401,18 @@ class $modify(LazerMenuLayer, MenuLayer) {
             {"platformer", icon::RUNNING, {102, 68, 204}, leave(State::Play, [] {
                 showScene(lazer::SongSelect::scene(lazer::levels::Kind::Platformer));
             }), true, lazer::sfx::sound::MENU_PLAY_SELECT, State::Play},
-            {"daily", icon::CALENDAR_DAY, PLAY_SUB, [] { creatorAction(&CreatorLayer::onDailyLevel); }, false, defaultSound, State::Play},
-            {"weekly", icon::CALENDAR_WEEK, PLAY_SUB, [] { creatorAction(&CreatorLayer::onWeeklyLevel); }, false, defaultSound, State::Play},
-            {"event", icon::BOLT, PLAY_SUB, [] { creatorAction(&CreatorLayer::onEventLevel); }, false, defaultSound, State::Play},
+            {"daily", icon::CALENDAR_DAY, PLAY_SUB, [] {
+                lazer::quips::say("daily", 0.35f);
+                creatorAction(&CreatorLayer::onDailyLevel);
+            }, false, defaultSound, State::Play},
+            {"weekly", icon::CALENDAR_WEEK, PLAY_SUB, [] {
+                lazer::quips::say("weekly", 0.35f);
+                creatorAction(&CreatorLayer::onWeeklyLevel);
+            }, false, defaultSound, State::Play},
+            {"event", icon::BOLT, PLAY_SUB, [] {
+                lazer::quips::say("event", 0.35f);
+                creatorAction(&CreatorLayer::onEventLevel);
+            }, false, defaultSound, State::Play},
 
             // create: your own levels
             {"my levels", icon::FOLDER_OPEN, {238, 170, 0}, creator(State::Create, &CreatorLayer::onMyLevels), true, defaultSound, State::Create},
@@ -449,7 +468,10 @@ class $modify(LazerMenuLayer, MenuLayer) {
                 creatorAction(handler);
             };
         };
-        toolbar->addLeft({lazer::makeIcon(icon::FIST, 1), "gauntlets", hub(&CreatorLayer::onGauntlets)});
+        toolbar->addLeft({lazer::makeIcon(icon::FIST, 1), "gauntlets", [hub] {
+            lazer::quips::say("gauntlets", 0.6f);
+            hub(&CreatorLayer::onGauntlets)();
+        }});
         // Map packs open as song select's pack list; back from it lands on the menu you left.
         toolbar->addLeft({lazer::makeIcon(icon::BOXES, 1), "map packs", [this] {
             g_returnState = m_fields->buttons ? m_fields->buttons->getState() : ButtonSystem::State::TopLevel;
@@ -515,6 +537,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         if (!Mod::get()->getSettingValue<bool>("enabled")) return MenuLayer::onQuit(sender);
         if (g_exiting || lazer::Dialog::isOpen()) return;
         // osu!'s ConfirmExitDialog in place of GD's quit popup.
+        lazer::quips::say("exit", 0.7f);
         Ref<MenuLayer> self = this;
         lazer::Dialog::show(icon::TRIANGLE_EXCLAMATION, "Are you sure you want to exit Geometry Dash?", "Last chance to turn back", {
             {"Let me out!", lazer::Dialog::Kind::Ok, [self] { static_cast<LazerMenuLayer*>(self.data())->quitGame(); }},
@@ -642,8 +665,14 @@ class $modify(LazerMenuLayer, MenuLayer) {
         add("leaderboards", {lazer::makeIcon(icon::RANKING_STAR, 1), "leaderboards", [this] { this->toggleLeaderboards(); }});
         add("quests", {lazer::makeIcon(icon::LIST_CHECK, 1), "quests", [this] { this->toggleQuests(); }});
         add("paths", {lazer::makeIcon(icon::ROUTE, 1), "paths", [this] { this->togglePaths(); }});
-        add("vault", {lazer::makeIcon(icon::VAULT, 1), "vault", hub(&CreatorLayer::onSecretVault)});
-        add("treasure-room", {lazer::makeIcon(icon::DUNGEON, 1), "treasure room", hub(&CreatorLayer::onTreasureRoom)});
+        add("vault", {lazer::makeIcon(icon::VAULT, 1), "vault", [hub] {
+            lazer::quips::say("vault", 0.6f);
+            hub(&CreatorLayer::onSecretVault)();
+        }});
+        add("treasure-room", {lazer::makeIcon(icon::DUNGEON, 1), "treasure room", [hub] {
+            lazer::quips::say("treasure", 0.6f);
+            hub(&CreatorLayer::onTreasureRoom)();
+        }});
 
         // Other mods' creator hub buttons.
         if (auto scanned = Ref(CreatorLayer::create())) {
@@ -703,12 +732,14 @@ class $modify(LazerMenuLayer, MenuLayer) {
         } else {
             closeOverlaysExcept(settings);
             settings->open();
+            lazer::quips::say("settings", 0.25f);
         }
     }
 
     // The chests are a dialog over whatever's open, and open themselves.
     void toggleRewards() {
         if (lazer::Dialog::isOpen()) return;
+        lazer::quips::say("chests", 0.5f);
         lazer::showRewards();
     }
 
@@ -724,6 +755,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         } else {
             closeOverlaysExcept(leaderboards);
             leaderboards->open();
+            lazer::quips::say("leaderboards", 0.5f);
         }
     }
 
@@ -739,6 +771,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         } else {
             closeOverlaysExcept(paths);
             paths->open();
+            lazer::quips::say("paths", 0.4f);
         }
     }
 
@@ -754,6 +787,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         } else {
             closeOverlaysExcept(quests);
             quests->open();
+            lazer::quips::say("quests", 0.4f);
         }
     }
 
@@ -769,6 +803,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         } else {
             closeOverlaysExcept(achievements);
             achievements->open();
+            lazer::quips::say("achievements", 0.5f);
         }
     }
 
@@ -784,6 +819,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         } else {
             closeOverlaysExcept(stats);
             stats->open();
+            lazer::quips::say("stats", 0.5f);
         }
     }
 

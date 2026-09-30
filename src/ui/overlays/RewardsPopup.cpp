@@ -1,6 +1,7 @@
 #include "RewardsPopup.hpp"
 
 #include "../core/Easing.hpp"
+#include "../core/Quips.hpp"
 #include "../core/RoundedBox.hpp"
 #include "../core/Text.hpp"
 #include "../core/Theme.hpp"
@@ -357,6 +358,7 @@ namespace {
         void burst(Slot& slot) {
             slot.phase = Phase::Opened;
             slot.t = 0;
+            quips::say("chest-open", 0.7f);
             setStatus(slot, "opened!", true);
             playChestSound("reward01.ogg");
             if (slot.chest) {

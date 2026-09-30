@@ -17,6 +17,7 @@
 
 #include "../../audio/Sfx.hpp"
 #include "Easing.hpp"
+#include "Quips.hpp"
 #include "RoundedBox.hpp"
 #include "Text.hpp"
 #include "Theme.hpp"
@@ -25,6 +26,7 @@
 
 #include <algorithm>
 #include <array>
+#include <ctime>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -259,6 +261,35 @@ namespace {
             // its body swings back against the motion, more the faster it goes.
             // Stiffer than the drag rotation, and off while that's turning it.
             m_time += dt;
+            // Left alone, it wonders where you went (once per lull); at the
+            // hour marks it notices how long you've been here; late at night
+            // or early in the morning it notices the time, once the menu is up.
+            if (m_hasPos && (std::abs(pos.x - m_lastPos.x) > 0.5f || std::abs(pos.y - m_lastPos.y) > 0.5f)) {
+                m_idleS = 0;
+                m_idleSaid = false;
+            } else if (visible && focused) {
+                m_idleS += dt;
+                if (m_idleS > 45 && !m_idleSaid) {
+                    m_idleSaid = true;
+                    quips::say("idle");
+                }
+            }
+            if (visible && focused) {
+                if (m_time > 7200 && !m_saidTwoHours) {
+                    m_saidTwoHours = true;
+                    quips::say("two-hours");
+                } else if (m_time > 3600 && !m_saidHour) {
+                    m_saidHour = true;
+                    quips::say("hour");
+                } else if (m_time > 12 && !m_saidClock) {
+                    m_saidClock = true;
+                    auto t = std::time(nullptr);
+                    std::tm local {};
+                    localtime_s(&local, &t);
+                    if (local.tm_hour < 4) quips::say("midnight", 0.8f);
+                    else if (local.tm_hour >= 5 && local.tm_hour < 7) quips::say("early", 0.8f);
+                }
+            }
             if (m_hasPos && ms > 0 && inside) {
                 CCPoint v = (pos - m_lastPos) * pxPerPoint / dt; // px/s, y up
                 m_velocity = CCPoint(damp(m_velocity.x, v.x, 0.9, ms), damp(m_velocity.y, v.y, 0.9, ms));
@@ -416,6 +447,9 @@ namespace {
         bool m_dizzySaid = false;
         int m_dizzyCount = 0;
         float m_lastDizzy = -100;
+        float m_idleS = 0;
+        bool m_idleSaid = false;
+        bool m_saidHour = false, m_saidTwoHours = false, m_saidClock = false;
     };
 
     // Not in the scene graph: visited by hand in swapBuffers. Kept for the

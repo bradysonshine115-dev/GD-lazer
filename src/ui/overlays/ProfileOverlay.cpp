@@ -1,6 +1,7 @@
 #include "ProfileOverlay.hpp"
 
 #include "../../audio/Sfx.hpp"
+#include "../core/Quips.hpp"
 #include "../../integrations/ModIntegrations.hpp"
 #include "../core/Text.hpp"
 #include "../core/Triangles.hpp"
@@ -139,6 +140,7 @@ void ProfileOverlay::present(ProfilePage* page) {
         }
     }
 
+    quips::say(page->m_ownProfile ? "profile-own" : "profile-other", page->m_ownProfile ? 0.5f : 0.25f);
     // The overlay takes the player's colour once it's known; start from their
     // own colours on their own profile.
     float hue = 255.f;

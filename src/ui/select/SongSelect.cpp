@@ -3,6 +3,7 @@
 #include "../../audio/MusicPlayer.hpp"
 #include "../../audio/Sfx.hpp"
 #include "../core/MenuCursor.hpp"
+#include "../core/Quips.hpp"
 #include "../core/Theme.hpp"
 #include "../menu/MenuBackground.hpp"
 #include "../overlays/Dialog.hpp"
@@ -324,6 +325,7 @@ void SongSelect::confirmDeleteUnhearted() {
                     count, count == 1 ? "" : "s"), {
         {"Yes. Go for it.", Dialog::Kind::Dangerous, [self] {
             levels::deleteUnhearted();
+            quips::say("delete-unhearted");
             self->reloadEntries();
         }},
         {"No! Abort mission", Dialog::Kind::Cancel, nullptr},
@@ -884,10 +886,8 @@ bool SongSelect::selectSong(std::string const& path, int songID) {
 void SongSelect::selectRandom() {
     static std::mt19937 rng {std::random_device {}()};
     // Five presses in a few seconds: the cursor has opinions.
-    m_randomPresses.push_back(m_enterMs);
-    while (!m_randomPresses.empty() && m_randomPresses.front() < m_enterMs - 3000) m_randomPresses.erase(m_randomPresses.begin());
-    if (m_randomPresses.size() == 5) {
-        cursorSay(RANDOM_SPAM_CURSOR[std::uniform_int_distribution<size_t>(0, RANDOM_SPAM_CURSOR.size() - 1)(rng)]);
+    if (quips::spam("random", 5, 3.f)) {
+        quips::sayLine(RANDOM_SPAM_CURSOR[std::uniform_int_distribution<size_t>(0, RANDOM_SPAM_CURSOR.size() - 1)(rng)]);
     }
     if (packMode()) {
         // Another pack, opened.
