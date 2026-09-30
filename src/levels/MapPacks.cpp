@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <unordered_map>
 
 using namespace geode::prelude;
 
@@ -82,7 +83,8 @@ namespace {
         int page = 0;
         int total = -1;              // from the page info, once known
         std::string listKey;         // the request in flight
-        size_t levelsFor = SIZE_MAX; // the pack whose levels are in flight
+        std::vector<size_t> levelsFor;                  // packs whose levels are in flight
+        std::vector<std::vector<size_t>> pendingChunks; // packs waiting their turn
         std::string levelsKey;
 
         void notify() {
@@ -123,33 +125,83 @@ namespace {
             }
         }
 
-        void levelsArrived(CCArray* items) {
-            if (levelsFor >= packs.size()) return;
-            auto& p = packs[levelsFor];
+        // Whether a pack's levels are in flight or waiting.
+        bool queued(size_t index) const {
+            if (std::find(levelsFor.begin(), levelsFor.end(), index) != levelsFor.end()) return true;
+            for (auto const& chunk : pendingChunks) {
+                if (std::find(chunk.begin(), chunk.end(), index) != chunk.end()) return true;
+            }
+            return false;
+        }
+
+        // One request for these packs' levels (SearchType::MapPackOnClick with
+        // every ID, the request GD's pack cell makes for one pack).
+        void requestChunk(std::vector<size_t> chunk) {
+            std::string ids;
+            for (size_t i : chunk) {
+                packs[i].state = State::Loading;
+                for (int id : packs[i].levelIDs) ids += (ids.empty() ? "" : ",") + std::to_string(id);
+            }
+            levelsFor = std::move(chunk);
+            auto search = GJSearchObject::create(SearchType::MapPackOnClick, ids);
+            levelsKey = search->getKey();
             auto glm = GameLevelManager::sharedState();
-            std::vector<levels::Entry> found;
+            glm->m_levelManagerDelegate = this;
+            log::debug("Map packs: requesting levels of {} packs ({})", levelsFor.size(), levelsKey);
+            // GD answers from its cache straight away when it has them.
+            glm->getOnlineLevels(search);
+        }
+
+        void nextChunk() {
+            if (!levelsFor.empty() || pendingChunks.empty()) return;
+            auto chunk = std::move(pendingChunks.front());
+            pendingChunks.erase(pendingChunks.begin());
+            requestChunk(std::move(chunk));
+        }
+
+        void chunkDone() {
+            levelsFor.clear();
+            levelsKey.clear();
+            auto glm = GameLevelManager::sharedState();
+            if (pendingChunks.empty() && glm->m_levelManagerDelegate == this && listKey.empty()) glm->m_levelManagerDelegate = nullptr;
+            notify();
+            nextChunk();
+        }
+
+        void levelsArrived(CCArray* items) {
+            // Each level to its pack.
+            std::unordered_map<int, size_t> owner;
+            for (size_t i : levelsFor) {
+                if (i >= packs.size()) continue;
+                for (int id : packs[i].levelIDs) owner.emplace(id, i);
+            }
+            std::unordered_map<size_t, std::vector<levels::Entry>> found;
             for (auto level : CCArrayExt<GJGameLevel*>(items)) {
                 if (!level) continue;
+                auto it = owner.find(level->m_levelID.value());
+                if (it == owner.end()) continue;
                 level = withSavedCopy(level);
                 auto e = levels::fromLevel(level, false);
-                e.pack = static_cast<int>(levelsFor);
-                found.push_back(std::move(e));
+                e.pack = static_cast<int>(it->second);
+                found[it->second].push_back(std::move(e));
             }
-            // In the pack's order.
-            p.levels.clear();
-            for (int id : p.levelIDs) {
-                auto it = std::find_if(found.begin(), found.end(), [id](auto const& e) { return e.id == id; });
-                if (it != found.end()) p.levels.push_back(*it);
+            for (size_t i : levelsFor) {
+                if (i >= packs.size()) continue;
+                auto& p = packs[i];
+                auto& got = found[i];
+                // In the pack's order.
+                p.levels.clear();
+                for (int id : p.levelIDs) {
+                    auto it = std::find_if(got.begin(), got.end(), [id](auto const& e) { return e.id == id; });
+                    if (it != got.end()) p.levels.push_back(*it);
+                }
+                for (auto& e : got) {
+                    if (std::none_of(p.levels.begin(), p.levels.end(), [&](auto const& l) { return l.id == e.id; })) p.levels.push_back(e);
+                }
+                p.state = p.levels.empty() ? State::Failed : State::Loaded;
+                log::info("Map pack {}: {} of {} levels loaded", p.name, p.levels.size(), p.levelIDs.size());
             }
-            for (auto& e : found) {
-                if (std::none_of(p.levels.begin(), p.levels.end(), [&](auto const& l) { return l.id == e.id; })) p.levels.push_back(e);
-            }
-            p.state = p.levels.empty() ? State::Failed : State::Loaded;
-            log::info("Map pack {}: {} of {} levels loaded", p.name, p.levels.size(), p.levelIDs.size());
-            levelsFor = SIZE_MAX;
-            levelsKey.clear();
-            if (glm->m_levelManagerDelegate == this && listKey.empty()) glm->m_levelManagerDelegate = nullptr;
-            notify();
+            chunkDone();
         }
 
         // LevelManagerDelegate. GD calls the typed pair; the plain pair is
@@ -177,14 +229,16 @@ namespace {
                 state = packs.empty() ? State::Failed : State::Loaded;
                 listKey.clear();
             } else if (!levelsKey.empty() && k == levelsKey) {
-                if (levelsFor < packs.size()) packs[levelsFor].state = State::Failed;
+                for (size_t i : levelsFor) {
+                    if (i < packs.size()) packs[i].state = State::Failed;
+                }
                 log::warn("Map pack levels failed ({})", k);
-                levelsFor = SIZE_MAX;
-                levelsKey.clear();
+                chunkDone();
+                return;
             } else {
                 return;
             }
-            if (glm->m_levelManagerDelegate == this && listKey.empty() && levelsKey.empty()) glm->m_levelManagerDelegate = nullptr;
+            if (glm->m_levelManagerDelegate == this && levelsKey.empty()) glm->m_levelManagerDelegate = nullptr;
             notify();
         }
 
@@ -222,23 +276,48 @@ void loadLevels(size_t index) {
     auto& s = Store::get();
     if (index >= s.packs.size()) return;
     auto& p = s.packs[index];
-    if (p.state == State::Loading || p.state == State::Loaded) return;
-    // One at a time: the delegate has one key in flight for levels.
-    if (s.levelsFor != SIZE_MAX) return;
+    if (p.state == State::Loading || p.state == State::Loaded || s.queued(index)) return;
     if (p.levelIDs.empty()) {
         p.state = State::Failed;
         return;
     }
+    // The pack the player is looking at goes first.
     p.state = State::Loading;
-    s.levelsFor = index;
-    std::string ids;
-    for (int id : p.levelIDs) ids += (ids.empty() ? "" : ",") + std::to_string(id);
-    auto search = GJSearchObject::create(SearchType::MapPackOnClick, ids);
-    s.levelsKey = search->getKey();
-    auto glm = GameLevelManager::sharedState();
-    glm->m_levelManagerDelegate = &s;
-    log::debug("Map pack {}: requesting levels ({})", p.name, s.levelsKey);
-    glm->getOnlineLevels(search);
+    s.pendingChunks.insert(s.pendingChunks.begin(), std::vector<size_t> {index});
+    s.nextChunk();
+}
+
+void loadAllLevels() {
+    auto& s = Store::get();
+    // A few packs per request (a handful of IDs each).
+    constexpr size_t PACKS_PER_REQUEST = 8;
+    std::vector<size_t> chunk;
+    for (size_t i = 0; i < s.packs.size(); i++) {
+        auto& p = s.packs[i];
+        if (p.state == State::Loading || p.state == State::Loaded || s.queued(i) || p.levelIDs.empty()) continue;
+        p.state = State::Loading;
+        chunk.push_back(i);
+        if (chunk.size() >= PACKS_PER_REQUEST) {
+            s.pendingChunks.push_back(std::move(chunk));
+            chunk.clear();
+        }
+    }
+    if (!chunk.empty()) s.pendingChunks.push_back(std::move(chunk));
+    s.nextChunk();
+}
+
+bool loadingLevels() {
+    auto& s = Store::get();
+    return !s.levelsFor.empty() || !s.pendingChunks.empty();
+}
+
+float levelsProgress() {
+    auto& s = Store::get();
+    if (s.packs.empty()) return 1.f;
+    size_t done = std::count_if(s.packs.begin(), s.packs.end(), [](Pack const& p) {
+        return p.state == State::Loaded || p.state == State::Failed;
+    });
+    return static_cast<float>(done) / s.packs.size();
 }
 
 void refresh(Pack& p) {

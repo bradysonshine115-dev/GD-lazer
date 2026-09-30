@@ -156,6 +156,10 @@ namespace {
 
     class MenuCursor : public CCNode {
     public:
+        void say(std::string const& text) {
+            if (m_bubble) m_bubble->say(text);
+        }
+
         static MenuCursor* create() {
             auto ret = new MenuCursor();
             if (ret->init()) {
@@ -426,6 +430,10 @@ namespace {
             g_cursor = cursor;
         }
     }
+}
+
+void cursorSay(std::string const& text) {
+    if (g_cursor && g_enabled) g_cursor->say(text);
 }
 
 } // namespace lazer

@@ -38,8 +38,14 @@ std::vector<Pack>& all();
 // Starts loading the list (every page, one after the other); nothing while
 // it's loading or loaded. The listener is told after every page.
 void load();
-// Loads a pack's levels; nothing while they're loading or loaded.
+// Loads a pack's levels; nothing while they're loading or loaded. Requests
+// go one at a time: another pack's waits its turn.
 void loadLevels(size_t index);
+// Loads every pack's levels (for searching them), a few packs per request.
+void loadAllLevels();
+// Whether any levels are on their way, and how many packs have theirs (0..1).
+bool loadingLevels();
+float levelsProgress();
 // Counts the pack's beaten levels again (after a play) and whether its
 // reward was taken.
 void refresh(Pack& pack);

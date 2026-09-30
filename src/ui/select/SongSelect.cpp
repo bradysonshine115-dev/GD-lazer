@@ -2,6 +2,7 @@
 
 #include "../../audio/MusicPlayer.hpp"
 #include "../../audio/Sfx.hpp"
+#include "../core/MenuCursor.hpp"
 #include "../core/Theme.hpp"
 #include "../menu/MenuBackground.hpp"
 #include "../overlays/Dialog.hpp"
@@ -130,6 +131,11 @@ bool SongSelect::init(levels::Kind kind, bool fromMenu) {
         packs::load();
         if (packs::state() != packs::State::Loading) rebuildPackEntries();
         log::info("Song select: {} map packs", packs::all().size());
+        // Many players dread this page. So does the cursor.
+        if (fromMenu) {
+            static std::mt19937 rng {std::random_device {}()};
+            cursorSay(MAP_PACKS_CURSOR[std::uniform_int_distribution<size_t>(0, MAP_PACKS_CURSOR.size() - 1)(rng)]);
+        }
     } else {
         m_entries = levels::all(m_kind);
         log::info("Song select: {} {} levels", m_entries.size(), m_kind == levels::Kind::Platformer ? "platformer" : "classic");
@@ -204,6 +210,7 @@ void SongSelect::buildFilter() {
         m_query = text;
         remembered().query = text;
         applyFilter();
+        m_noResultsMs = 900; // once the typing stops
     });
     this->addChild(m_search, 5);
 
@@ -443,13 +450,20 @@ void SongSelect::applyFilter() {
     for (size_t i = 0; i < m_entries.size(); i++) {
         auto const& e = m_entries[i];
         if (packMode()) {
-            // The packs are the rows; the open one's levels go under it below.
+            // The packs are the rows; the open one's levels (and, searching,
+            // the matching ones) go under them below.
             if (!e.packHeader) continue;
             auto pack = packOf(e);
             bool done = pack && !pack->levelIDs.empty() && pack->completed >= static_cast<int>(pack->levelIDs.size());
             if (m_group == Group::Official && done) continue; // unfinished
             if (m_group == Group::Liked && !done) continue;   // completed
-            if (!query.empty() && e.search.find(query) == std::string::npos) continue;
+            if (!query.empty() && e.search.find(query) == std::string::npos) {
+                // By a level's name or creator, once the levels are known.
+                bool byLevel = pack && std::any_of(pack->levels.begin(), pack->levels.end(), [&](auto const& l) {
+                    return l.search.find(query) != std::string::npos;
+                });
+                if (!byLevel) continue;
+            }
             m_visible.push_back(i);
             continue;
         }
@@ -482,18 +496,24 @@ void SongSelect::applyFilter() {
         case levels::Sort::Default:
             break;
     }
-    if (packMode() && m_expandedPack >= 0) {
-        // The open pack's levels sit under its header, in the pack's order.
-        for (size_t v = 0; v < m_visible.size(); v++) {
-            if (m_entries[m_visible[v]].pack != m_expandedPack) continue;
-            std::vector<size_t> rows;
-            for (size_t j = m_visible[v] + 1; j < m_entries.size(); j++) {
-                if (m_entries[j].packHeader || m_entries[j].pack != m_expandedPack) break;
-                rows.push_back(j);
+    if (packMode()) {
+        // Under each header: the open pack's levels, and while searching the
+        // levels that match, in the pack's order. Searching needs every
+        // pack's levels: fetched now, a few packs at a time.
+        if (!query.empty() && packs::levelsProgress() < 1.f) packs::loadAllLevels();
+        std::vector<size_t> rows;
+        for (size_t v : m_visible) {
+            rows.push_back(v);
+            auto const& h = m_entries[v];
+            for (size_t j = v + 1; j < m_entries.size(); j++) {
+                auto const& l = m_entries[j];
+                if (l.packHeader || l.pack != h.pack) break;
+                bool open = h.pack == m_expandedPack;
+                bool hit = !query.empty() && l.search.find(query) != std::string::npos;
+                if (open || hit) rows.push_back(j);
             }
-            m_visible.insert(m_visible.begin() + v + 1, rows.begin(), rows.end());
-            break;
         }
+        m_visible = std::move(rows);
     }
     layoutRows();
 
@@ -529,6 +549,9 @@ void SongSelect::applyFilter() {
             size_t n = std::count_if(m_visible.begin(), m_visible.end(), [&](size_t i) { return m_entries[i].packHeader; });
             std::string text = fmt::format("{} map pack{}", n, n == 1 ? "" : "s");
             if (packs::state() == packs::State::Loading) text += " so far";
+            else if (!query.empty() && packs::loadingLevels()) {
+                text = fmt::format("searching levels... {}%", static_cast<int>(packs::levelsProgress() * 100));
+            }
             m_countLabel->setString(text.c_str());
         } else {
             m_countLabel->setString(fmt::format("{} {} level{}", m_visible.size(),
@@ -538,6 +561,7 @@ void SongSelect::applyFilter() {
 
     if (m_visible.empty()) {
         m_hasSelection = false;
+        m_lastSelection = {};
         updateWedge();
         return;
     }
@@ -651,11 +675,16 @@ void SongSelect::onPacksChanged() {
         return;
     }
     // The rows are rebuilt: the selection is found again by ID (select()
-    // keeps it in remembered()).
+    // keeps it in remembered()), and its details are redrawn in place.
     rebuildPackEntries();
     m_hasSelection = false;
     applyFilter();
+    refreshDetails();
     restoreExpandedPack();
+    if (m_expandedPack >= 0 && m_expandedPack < static_cast<int>(packs::all().size())
+        && packs::all()[m_expandedPack].state == packs::State::Failed) {
+        cursorSay("the servers said no");
+    }
 }
 
 void SongSelect::restoreExpandedPack() {
@@ -733,10 +762,12 @@ void SongSelect::claimPack(int pack) {
         fmt::format("{} gave you {} star{} and {} coin{}.", p.name, p.stars, p.stars == 1 ? "" : "s",
                     p.coins, p.coins == 1 ? "" : "s"),
         {{"Nice", Dialog::Kind::Ok, nullptr}});
+    cursorSay("free stars! well, earned.");
     // The header's progress and its reward chip change.
     rebuildPackEntries();
     m_hasSelection = false;
     applyFilter();
+    refreshDetails();
 }
 
 levels::Entry const* SongSelect::selectedEntry() const {
@@ -791,6 +822,12 @@ void SongSelect::select(size_t visibleIndex, bool scroll) {
 
     if (scroll) m_scrollTarget = itemTop(visibleIndex) + rowHeight(visibleIndex) / 2 - viewHeight() / 2;
     if (!changed) return;
+    // The rows were rebuilt and it's the same level: nothing to redo (the
+    // caller refreshes the details if they changed).
+    auto const& entry = m_entries[m_visible[visibleIndex]];
+    SelectionKey key {entry.id, entry.official, entry.packHeader};
+    if (key == m_lastSelection) return;
+    m_lastSelection = key;
 
     // Song and coins for the details, the preview and play.
     levels::resolve(m_entries[m_visible[visibleIndex]]);
@@ -846,6 +883,12 @@ bool SongSelect::selectSong(std::string const& path, int songID) {
 
 void SongSelect::selectRandom() {
     static std::mt19937 rng {std::random_device {}()};
+    // Five presses in a few seconds: the cursor has opinions.
+    m_randomPresses.push_back(m_enterMs);
+    while (!m_randomPresses.empty() && m_randomPresses.front() < m_enterMs - 3000) m_randomPresses.erase(m_randomPresses.begin());
+    if (m_randomPresses.size() == 5) {
+        cursorSay(RANDOM_SPAM_CURSOR[std::uniform_int_distribution<size_t>(0, RANDOM_SPAM_CURSOR.size() - 1)(rng)]);
+    }
     if (packMode()) {
         // Another pack, opened.
         std::vector<int> others;
@@ -974,6 +1017,14 @@ void SongSelect::update(float dt) {
 
     m_wedgeAlpha.update(dt);
     if (m_loadingSpinner) m_loadingSpinner->setRotation(m_loadingSpinner->getRotation() + dt * 300.f);
+    if (m_noResultsMs >= 0) {
+        m_noResultsMs -= ms;
+        bool searching = packMode() && packs::loadingLevels();
+        if (m_noResultsMs < 0 && !m_query.empty() && m_visible.empty() && !searching && m_saidFor != m_query) {
+            m_saidFor = m_query;
+            cursorSay(NO_RESULTS_CURSOR[pickLine(m_query + "!", NO_RESULTS_CURSOR.size())]);
+        }
+    }
     m_wedge->setPositionX(-24 * m_k * (1.f - m_wedgeAlpha.get()));
 
     if (m_previewDelay >= 0) {

@@ -31,15 +31,20 @@ void SongSelect::updateWedge(bool animate) {
     float w = m_leftW;
 
     if (!m_hasSelection) {
-        std::string text = "no levels match your search";
+        // A fruitless search gets one of a few lines, held still by the text.
+        std::string text = m_query.empty() ? "no levels match your search"
+                                           : NO_RESULTS_LINES[pickLine(m_query, NO_RESULTS_LINES.size())];
         bool retry = false;
+        bool searching = false;
         if (packMode()) {
             auto state = packs::state();
-            text = "no map packs match your search";
             if (state == packs::State::Loading || state == packs::State::Unloaded) text = "loading map packs...";
             else if (state == packs::State::Failed) {
                 text = "couldn't load the map packs";
                 retry = true;
+            } else if (!m_query.empty() && packs::loadingLevels()) {
+                text = fmt::format("searching the packs' levels... {}%", static_cast<int>(packs::levelsProgress() * 100));
+                searching = true;
             } else if (m_query.empty() && m_group == Group::Liked) text = "no map packs completed yet";
             else if (m_query.empty() && m_group == Group::Official) text = "every map pack is complete!";
         } else if (m_entries.empty()) text = "no levels yet";
@@ -50,7 +55,7 @@ void SongSelect::updateWedge(bool animate) {
         none->setAnchorPoint({0, 0.5f});
         none->setPosition({40 * k, H - 60 * k});
         m_wedge->addChild(none);
-        if (packMode() && (packs::state() == packs::State::Loading || packs::state() == packs::State::Unloaded)) {
+        if (packMode() && (searching || packs::state() == packs::State::Loading || packs::state() == packs::State::Unloaded)) {
             // A spinner beside it (turned in update()), on the glyph's own centre.
             auto holder = CCNode::create();
             auto glyph = makeIcon(icon::ROTATE, 22 * k);

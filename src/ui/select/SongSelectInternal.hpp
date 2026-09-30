@@ -7,6 +7,7 @@
 #include "../../integrations/LevelThumbnails.hpp"
 #include "../core/Text.hpp"
 
+#include <array>
 #include <cmath>
 #include <functional>
 #include <string>
@@ -229,6 +230,41 @@ namespace songselect {
         }
         if (e.official) thumbnails::fetchOfficial(e.id, std::move(callback), std::move(wanted));
         else thumbnails::fetch(e.id, std::move(callback), std::move(wanted));
+    }
+
+    // What the page says when a search finds nothing, picked by the search
+    // text so it holds still while you type (osu!'s NoResultsPlaceholder is
+    // plainer; players asked for some fun here).
+    inline constexpr std::array<char const*, 7> NO_RESULTS_LINES {{
+        "i tried my best bro...",
+        "nothing. make sure you typed it right",
+        "no level called that. yet.",
+        "checked twice. still nothing.",
+        "maybe it's in another game",
+        "the search came back empty-handed",
+        "not a single one. sorry.",
+    }};
+    // And what the cursor says about it.
+    inline constexpr std::array<char const*, 6> NO_RESULTS_CURSOR {{
+        "make sure you typed right",
+        "i tried my best bro",
+        "nope, nothing",
+        "that's not a level",
+        "typo? no? ok...",
+        "i looked everywhere",
+    }};
+    inline constexpr std::array<char const*, 3> MAP_PACKS_CURSOR {{
+        "not the map packs...",
+        "oh no. not the map packs",
+        "map packs? brave.",
+    }};
+    inline constexpr std::array<char const*, 3> RANDOM_SPAM_CURSOR {{
+        "just pick one already",
+        "the random button is tired",
+        "that's not how random works",
+    }};
+    inline size_t pickLine(std::string const& seed, size_t count) {
+        return std::hash<std::string> {}(seed) % count;
     }
 
     // The pack an entry belongs to (a header, or one of its levels), or null.

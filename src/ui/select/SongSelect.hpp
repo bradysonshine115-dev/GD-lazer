@@ -232,6 +232,19 @@ protected:
     std::string m_query;
     int m_expandedPack = -1;          // pack index whose levels are shown
     std::vector<float> m_rowTops;     // top of each visible row, then the end
+    // What was selected last, so a rebuild that lands on the same level
+    // doesn't animate the wedge in again.
+    struct SelectionKey {
+        int id = -1;
+        bool official = false;
+        bool header = false;
+        bool operator==(SelectionKey const&) const = default;
+    } m_lastSelection;
+    // The cursor comments on a fruitless search once you've stopped typing.
+    float m_noResultsMs = -1;
+    std::string m_saidFor;
+    // ...and on hammering random.
+    std::vector<float> m_randomPresses;
 
     MenuBackground* m_background = nullptr;
     cocos2d::CCNode* m_carousel = nullptr;

@@ -9,8 +9,11 @@ namespace lazer {
 // would freeze with them).
 #ifdef GEODE_IS_WINDOWS
 void releaseMenuCursor();
+// The cursor says something in its speech bubble (nothing without the cursor).
+void cursorSay(std::string const& text);
 #else
 inline void releaseMenuCursor() {}
+inline void cursorSay(std::string const&) {}
 #endif
 
 } // namespace lazer
