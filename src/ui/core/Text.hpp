@@ -115,6 +115,11 @@ namespace icon {
 
 cocos2d::CCLabelBMFont* makeIcon(char const* glyph, float size);
 
+// A glyph's box isn't centred on what's drawn (most sit low in their line):
+// moves the label's anchor to the middle of the drawn glyph, so its position
+// is the icon's visual centre. Call again after changing the string.
+void anchorOnGlyph(cocos2d::CCLabelBMFont* label);
+
 // Regular-weight text wrapped to `maxWidth` (greedy, by words). The node's
 // origin is the block's top-left corner; lines hang below it. Its content
 // size is the size of the whole block.

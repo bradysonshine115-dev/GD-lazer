@@ -115,6 +115,7 @@ bool WaveOverlay::init(float topInset, theme::Scheme scheme, char const* icon,
     m_closeButton->setPosition({win.width - pad * 0.6f - closeSize / 2, m_height - headerH / 2});
     auto closeIcon = makeIcon(icon::XMARK, closeSize * 0.45f);
     closeIcon->setColor(theme::rgb(scheme.content1()));
+    anchorOnGlyph(closeIcon);
     closeIcon->setPosition({closeSize / 2, closeSize / 2});
     m_closeButton->addChild(closeIcon, 1);
     m_content->addChild(m_closeButton, 3);

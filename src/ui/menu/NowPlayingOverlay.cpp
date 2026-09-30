@@ -147,6 +147,7 @@ NowPlayingOverlay::Button& NowPlayingOverlay::addButton(char const* glyph, float
     node->addChild(hover);
 
     auto label = makeIcon(glyph, ICON_SIZE * k * iconScale);
+    anchorOnGlyph(label);
     label->setPosition({s / 2, s / 2});
     node->addChild(label, 1);
 
@@ -155,7 +156,9 @@ NowPlayingOverlay::Button& NowPlayingOverlay::addButton(char const* glyph, float
 }
 
 void NowPlayingOverlay::setIcon(Button& b, char const* glyph) {
-    if (std::string_view(b.icon->getString()) != glyph) b.icon->setString(glyph);
+    if (std::string_view(b.icon->getString()) == glyph) return;
+    b.icon->setString(glyph);
+    anchorOnGlyph(b.icon);
 }
 
 void NowPlayingOverlay::setText(CCLabelBMFont* label, std::string const& text) {

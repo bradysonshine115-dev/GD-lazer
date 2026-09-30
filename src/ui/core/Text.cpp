@@ -3,6 +3,7 @@
 #include <Geode/Geode.hpp>
 
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 #include <vector>
 
@@ -194,6 +195,22 @@ void useHaloShader(CCLabelBMFont* label) {
 
 CCLabelBMFont* makeIcon(char const* glyph, float size) {
     return makeLabel(glyph, "icons-sdf.fnt"_spr, size);
+}
+
+void anchorOnGlyph(CCLabelBMFont* label) {
+    float minX = FLT_MAX, minY = FLT_MAX, maxX = -FLT_MAX, maxY = -FLT_MAX;
+    for (auto letter : CCArrayExt<CCNode*>(label->getChildren())) {
+        // setString keeps the letters of a longer old string around, hidden.
+        if (!letter->isVisible()) continue;
+        auto box = letter->boundingBox();
+        minX = std::min(minX, box.getMinX());
+        minY = std::min(minY, box.getMinY());
+        maxX = std::max(maxX, box.getMaxX());
+        maxY = std::max(maxY, box.getMaxY());
+    }
+    auto size = label->getContentSize();
+    if (minX > maxX || size.width <= 0 || size.height <= 0) return;
+    label->setAnchorPoint({(minX + maxX) / 2 / size.width, (minY + maxY) / 2 / size.height});
 }
 
 // Greedy word wrap using the label's own measurements.
