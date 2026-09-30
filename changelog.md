@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.6.1
+
+- Fixed: crash on Settings > Audio > Soundtracks (thanks 1mercdev for the report)
+- Fixed: the pause menu staying up (and piling up) after unpausing with a key such as space, with Custom Keybinds (thanks 1mercdev for the report)
+- Fixed: the cursor sitting in the middle of the screen during a level with GD's lock cursor on and show cursor off (thanks Kierek3 for the report)
+
 ## v0.6.0
 
 - You're one of few valuable testers: expect rare crashes. A line on the main menu says so. Please report anything that breaks
