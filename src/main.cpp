@@ -393,6 +393,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
             }), true, lazer::sfx::sound::MENU_PLAY_SELECT, State::Play},
             {"daily", icon::CALENDAR_DAY, PLAY_SUB, [] { creatorAction(&CreatorLayer::onDailyLevel); }, false, defaultSound, State::Play},
             {"weekly", icon::CALENDAR_WEEK, PLAY_SUB, [] { creatorAction(&CreatorLayer::onWeeklyLevel); }, false, defaultSound, State::Play},
+            {"event", icon::BOLT, PLAY_SUB, [] { creatorAction(&CreatorLayer::onEventLevel); }, false, defaultSound, State::Play},
 
             // create: your own levels
             {"my levels", icon::FOLDER_OPEN, {238, 170, 0}, creator(State::Create, &CreatorLayer::onMyLevels), true, defaultSound, State::Create},
@@ -450,7 +451,6 @@ class $modify(LazerMenuLayer, MenuLayer) {
         };
         toolbar->addLeft({lazer::makeIcon(icon::FIST, 1), "gauntlets", hub(&CreatorLayer::onGauntlets)});
         toolbar->addLeft({lazer::makeIcon(icon::BOXES, 1), "map packs", hub(&CreatorLayer::onMapPacks)});
-        toolbar->addLeft({lazer::makeIcon(icon::BOLT, 1), "event level", hub(&CreatorLayer::onEventLevel)});
 
         buttons->setStateCallback([toolbar](ButtonSystem::State state) {
             // Back in a menu: nothing left to restore on the next menu load.
