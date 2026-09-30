@@ -225,7 +225,11 @@ void PauseMenu::build() {
 
     // GD's music and effects sliders, through GD's own (hidden) sliders and
     // handlers when they're there.
-    Ref<PauseLayer> layerRef = m_layer;
+    // A plain pointer: the menu is the layer's child, so a strong reference
+    // here would be a cycle that kept the pause layer (and other mods'
+    // keybind listeners on it) alive after the level, and a pause key pressed
+    // anywhere later would resume a level that's gone.
+    PauseLayer* layerRef = m_layer;
     Ref<Slider> music = m_musicSlider;
     Ref<Slider> effects = m_sfxSlider;
     std::function<float()> getMusic = [] { return GameManager::get()->m_bgVolume; };
