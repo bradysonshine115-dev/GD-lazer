@@ -25,8 +25,8 @@ namespace lazer {
 // LevelCommentDelegate / CommentUploadDelegate while it's open. GD keeps raw
 // pointers to those, so they're cleared on exit and destruction.
 //
-// Every InfoLayer GD opens for a level is routed here (see the hook at the
-// end of the .cpp); profile comments and level lists keep GD's.
+// Every InfoLayer GD opens for a level is routed here (see the hook in
+// CommentsOverlayHooks.cpp); profile comments and level lists keep GD's.
 class CommentsOverlay : public WaveOverlay, public cocos2d::CCKeypadDelegate,
                         public LevelCommentDelegate, public CommentUploadDelegate, public TextInputDelegate {
 public:
