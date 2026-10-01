@@ -13,7 +13,7 @@ I also understand the concern about how closely it follows osu!lazer's design. C
 
 ## About
 
-A Geode mod that rebuilds Geometry Dash's menus in the style of osu!lazer: a music-reactive main menu, a song-select screen for your levels, full-screen overlays for settings, chests, achievements and stats, and an intro and outro, all animated and with sounds.
+A Geode mod that rebuilds Geometry Dash's menus in the style of osu!lazer: a music-reactive main menu, a song-select screen for your levels, map packs and online lists, a page for every level, full-screen overlays for settings, chests, achievements, paths and more, an osu!-style pause menu, and an intro and outro, all animated and with sounds.
 
 Lazer UI is a personal project, developed with heavy use of AI coding tools.
 
@@ -30,64 +30,70 @@ It replaces GD's menus, not its gameplay. GD's own screens and handlers still ru
 
 | | |
 |---|---|
-| ![Play submenu](docs/screenshots/play-submenu.jpg) | ![Song select](docs/screenshots/song-select.jpg) |
-| Play submenu | Song select |
-| ![Settings](docs/screenshots/settings.jpg) | ![Achievements](docs/screenshots/achievements.jpg) |
-| Settings | Achievements |
-| ![Profile](docs/screenshots/profile.jpg) | |
-| Profile | |
+| ![Song select](docs/screenshots/song-select.jpg) | ![Browsing online](docs/screenshots/online.jpg) |
+| Song select | Browsing online (featured) |
+| ![Level page](docs/screenshots/level-page.jpg) | ![Pause menu](docs/screenshots/pause.jpg) |
+| Level page | Pause menu |
+| ![Paths](docs/screenshots/paths.jpg) | ![Profile](docs/screenshots/profile.jpg) |
+| Paths | Profile |
+| ![Settings](docs/screenshots/settings.jpg) | |
+| Settings | |
+
+## Platforms
+
+Windows, Android and macOS (Apple Silicon and Intel), all for GD 2.2081 and Geode 5.10.1. Every Actions run builds all three into one `.geode`. The osu! cursor is Windows-only; phones get tilt parallax instead of the mouse one. On macOS, Lazer's graphics and parental dialogs fall back to GD's own for now.
 
 ## Features
 
 **Main menu**
 - Pulsing logo with an audio visualiser, beat-synced side flashes and drifting triangles
-- Button bar with **play**, **create** and **browse** submenus, replacing GD's confusing creator hub:
-  - play: classic, platformer, daily, gauntlets, map packs
-  - create: my levels, new level, my lists
+- Button bar with **play**, **create** and **browse** submenus in place of GD's creator hub:
+  - play: classic, platformer, daily, weekly, event
+  - create: my levels, my lists
   - browse: search, featured, lists, hall of fame, magic, recent (and sent, for moderators)
-- Toolbar with every vanilla and mod menu button, plus leaderboards, quests, paths, weekly, event, vault and treasure room
+- Toolbar with every vanilla and mod menu button: gauntlets and map packs on the left; achievements, statistics, leaderboards, quests, paths, chests, vault, treasure room, the music player and mods on the right. Other mods' creator hub buttons move here too
 - Blurred, parallax background that crossfades to the playing level's thumbnail
 
 **Music player**
 - The menu plays the downloaded songs of your saved levels instead of the menu loop
 - Now-playing card with previous / play / next / shuffle, a seek bar and a song ticker
 - Block songs you never want to hear (sound-effect packs and the like); tracks under 30 s are skipped
+- With Ventilla installed, its live radio can be the menu's music instead
 
-**Song select (play → classic / platformer)**
-- RobTop's levels and your saved levels in one curved carousel, with search, groups and sorting
-- Classic and platformer levels are separate lists; platformers include the Tower's levels and show moons and best times
-- The selected level's details, a preview of its song, and its thumbnail as the background
-- Playing a level, or backing out of GD's level page, returns to song select
+**Song select**
+- Your saved levels and RobTop's in one curved carousel, with search, folders, groups and sorting; classic and platformer levels are separate lists
+- The selected level's details on the left: progress, description, song, options, comments and leaderboard. Its song previews and its thumbnail becomes the background
+- Map packs open here too: a pack's row unfolds into its levels
+- Online lists are the same screen: search, featured, lists, hall of fame, magic, recent and sent load a page at a time as you scroll, with a sort, GD's filters, a pager and refresh. Lists unfold into their levels, and other mods' search-screen buttons sit beside the controls
 
-**Online levels (browse)**
-- osu!-style listing pages over GD's own level browser: level cards with thumbnails, ratings and stats, loading the next page as you scroll
-- The search page has a search box, difficulty / demon / length / general / played / type filters and the quick searches as sort tabs; song select's "browse" opens it with the search text
+**Level page**
+- A level opens on its own page instead of GD's: its picture, rating, difficulty, stars, coins, song, downloads and likes, then play, heart, like, comments, add to list, copy the ID and the song's download
+- Below: the description, details, your progress and its scores (top, this week or friends). GD's own page is one tap away
 
 **Your levels and lists (create)**
-- My levels and my lists open as the same kind of page, in the create button's orange: cards with the song, length, object count and whether each is verified or uploaded, a search box and GD's folders as a filter
-- A "new level" / "new list" button, and your levels can switch to the ones you uploaded
-- Tapping one opens GD's level (or list) page; backing out comes back to the page, then to the create buttons
-
-**Updates**
-- Not on the Geode index, so the mod updates itself: on start it checks the version on GitHub's main branch and offers to download and install the new release (turn off in Lazer settings > Updates)
+- My levels and my lists open as pages of cards with the song, length, object count and whether each is verified or uploaded, a search box, GD's folders, a new level / new list button and your uploaded levels
 
 **Overlays**
 - Searchable settings covering GD's options and the mod's own, including account actions (save, load, refresh login, unlink)
-- Daily chests, quests, achievements (filters, search, categories), statistics
+- Daily chests, quests, achievements, statistics, leaderboards (top 100, friends, global, creators) and paths (every path's ranks and rewards; unlock, activate and claim)
 - Account card and a redesigned profile page for any player
-- GD's shops (the Shopkeeper's, Scratch's, Potbor's, the Mechanic's and the diamond shop) as osu!-style pages: your orbs or diamonds in the header, the items as cards with GD's art, their price and whether you own them; buying goes through GD's own popup, and the shopkeeper still talks
-- A level's comments (the level page's info button) as an osu!-style page: its description, ID and dates, newest or top comments, posting and voting, and GD's own info page one tap away
+- GD's shops as osu!-style pages; buying goes through GD's own popup, and the shopkeeper still talks
+- A level's comments: newest or top, posting and voting, the writer's profile one tap away
 - GD's popups restyled to match
 
-**Pause and level complete**
-- The pause menu is osu!'s: a big "paused" title, continue / retry / quit as wide buttons, the retry count and your progress. Practice mode, restarting from the start, edit, the level options, volume and other mods' pause buttons sit in a row underneath
-- Finishing a level (or finishing it in practice) shows an osu!-style results card with the level, its creator, your attempts, jumps and time, a "new best" badge on a first clear, GD's reward and coin animations, and retry / menu / edit / leaderboard buttons
+**Pause and level complete** (off by default: turn on "Lazer pause and results")
+- osu!'s pause menu: continue, retry and practice, your progress and the retry count, music and effects volume, quit, options and other mods' pause buttons
+- An osu!-style results screen when you finish a level, with your attempts, jumps and time, a "new best" badge, GD's rewards and coins, and other mods' end-screen buttons
 
 **Startup and exit**
-- Black loading screen with a spinner, then an animated intro while the first song fades in
-- Outro when quitting
+- Black loading screen with a spinner, then an animated intro while the first song fades in; an outro when quitting
 
-**Sound:** hover and click sounds on every control, with their own volume setting.
+**Cursor and sound**
+- osu!'s menu cursor on Windows. It shows exactly when the system cursor would, so it stays out of gameplay and behaves with other mods' menus
+- Hover and click sounds on every control, with their own volume setting
+
+**Updates**
+- Not on the Geode index, so the mod updates itself: on start it checks the version on GitHub's main branch and offers to download and install the new release (Lazer settings > Updates)
 
 ## Optional integrations
 
@@ -95,24 +101,27 @@ None of these are required. The matching extras appear when a mod is installed.
 
 | Mod | Adds |
 |---|---|
-| Level Thumbnails (`cdc.level_thumbnails`) | Level thumbnails for backgrounds and song-select panels |
+| Level Thumbnails (`cdc.level_thumbnails`) | Level thumbnails for backgrounds, song select and the level page |
 | Separate Dual Icons (`weebify.separate_dual_icons`) | Player 2 icons on the account card and your profile |
 | Better Progression (`itzkiba.better_progression`) | Level badge and EXP bar |
+| Ventilla (`joseii.ventilla`) | Its live radio as the menu's music, with its options in Settings > Audio |
 | Globed (`dankmeme.globed2`) | A proper "multiplayer" toolbar button |
 
-[Image Plus](https://github.com/Prevter/ImagePlus) (`prevter.imageplus`) is required, to decode the WebP thumbnails.
+[Image Plus](https://github.com/Prevter/ImagePlus) (`prevter.imageplus`, to decode the WebP thumbnails) and Custom Keybinds (`geode.custom-keybinds`) are required.
 
 ## How it works
 
 - **`early-load`** is set so the mod can restyle GD's loading screen from its first frame. Nothing else runs early. At that point the mod's own resources aren't loaded yet, so the loading screen is drawn entirely in code.
-- **GD layers run hidden.** Several overlays drive GD's own layers (RewardsPage, ChallengesPage, ProfilePage, InfoLayer, GJShopLayer, AccountLayer, CreatorLayer...) kept hidden and non-interactive, and call their handlers. GD's logic, networking and saving are never reimplemented.
-- **Networking:** level thumbnails, fetched from the Level Thumbnails community server (`levelthumbs.prevter.me`) and cached on disk, and the update check: `mod.json` and `changelog.md` from this repo's `main` branch, plus the GitHub release when you choose to update (it's checked to be this mod at that version, for this platform, GD and Geode, before it replaces the installed one). No accounts, analytics or other requests.
-- **The background blur** captures GD's scene or the level image at a quarter of the screen, blurs it there in two passes (horizontal, then vertical) and upscales the result. A settled level image keeps its blur rather than redoing it every frame; GD's live scene is recaptured every frame.
-- **Settings:** everything can be switched off. `enabled` turns the whole mod off; the intro/outro, music player, popup restyle, profile restyle, pause and results restyle (off by default), background dim, blur and triangles each have their own toggle.
+- **GD layers run hidden.** The pages drive GD's own layers (LevelInfoLayer, LevelBrowserLayer, RewardsPage, ProfilePage, GJShopLayer, CreatorLayer...) kept hidden and non-interactive, and press their real buttons. GD's logic, networking and saving are never reimplemented.
+- **Networking:** level thumbnails, fetched from the Level Thumbnails community server (`levelthumbs.prevter.me`) and cached on disk, and the update check: `mod.json` and `changelog.md` from this repo's `main` branch, plus the GitHub release when you choose to update. The download is checked to be this mod, at that version, for your platform, GD and Geode, before it replaces the installed one. No accounts, analytics or other requests.
+- **The background blur** captures GD's scene or the level image at a quarter of the screen, blurs it there in two passes and upscales the result. A settled level image keeps its blur instead of redoing it every frame.
+- **Settings:** everything can be switched off. `enabled` turns the whole mod off; the intro and outro, music player, popup restyle, profile restyle, pause and results restyle, background dim, blur, triangles, parallax and cursor each have their own setting.
 
 ## Building
 
 Requires the [Geode SDK](https://docs.geode-sdk.org/) (v5.10.1) and its CLI.
+
+**Windows:**
 
 ```bash
 geode sdk install-binaries
@@ -122,27 +131,19 @@ cmake --build build --config RelWithDebInfo
 
 The build installs the `.geode` into your GD mods folder.
 
-### macOS
+**macOS** (a universal binary for Apple Silicon and Intel; needs Apple's Command Line Tools and CMake):
 
-The macOS build targets GD 2.2081 and Geode 5.10.1. It produces a universal
-binary for Apple Silicon and Intel Macs. Install Apple's Command Line Tools,
-CMake, and the Geode CLI, then point `GEODE_SDK` at the SDK checkout:
-
-```sh
+```bash
 geode sdk install-binaries --platform mac --version 5.10.1
-cmake -S . -B build-mac -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DGEODE_TARGET_PLATFORM=MacOS -DGEODE_DONT_INSTALL_MODS=ON
+cmake -S . -B build-mac -DCMAKE_BUILD_TYPE=RelWithDebInfo -DGEODE_TARGET_PLATFORM=MacOS -DGEODE_DONT_INSTALL_MODS=ON
 cmake --build build-mac --parallel 4
 ```
 
-With GD closed, copy `build-mac/kamol1dn.lazer-ui.geode` into the mods
-folder opened by Geode's folder button, then restart GD. Install the required
-Image Plus and Custom Keybinds dependencies through Geode.
+With GD closed, copy `build-mac/kamol1dn.lazer-ui.geode` into the mods folder opened by Geode's folder button.
 
-The custom osu! cursor and Lazer's graphics and parental dialogs are
-Windows-only for now; macOS uses the system cursor and GD's own dialogs.
+**Android:** CI builds both Android targets with NDK r29 (29.0.14206865). Newer NDKs link against a libc++ symbol that Geode's `libc++_shared.so` lacks.
 
-**Releasing:** bump `version` in `mod.json`, rename the changelog's `## Unreleased` heading to that version (e.g. `## v0.3.0`), and push to `main`. The changelog section becomes the release notes, both on GitHub and in the in-game update prompt. CI builds it and publishes a GitHub release tagged with that version if none exists yet; installed copies see the new version on main and download that release.
+**Releasing:** write the changes under the next version's heading in `changelog.md` (e.g. `## v0.6.1`), then set `version` in `mod.json` to it and push to `main`. CI builds it and publishes a GitHub release for that version if none exists yet, with the changelog section as its notes. Installed copies see the new version on main and offer to download it.
 
 Icon glyphs are baked into a bitmap font at build time. To add one, list it in `tools/gen_icons.py` and run it: the script updates both `src/ui/core/Text.hpp` and the charset in `mod.json`.
 
@@ -150,23 +151,23 @@ Icon glyphs are baked into a bitmap font at build time. To add one, list it in `
 
 ```
 src/
-  main.cpp            main menu (MenuLayer hook), toolbar, submenus, intro / outro hookup
   audio/              UI sounds, menu music player, audio analysis (beats, spectrum)
-  levels/             level library for song select
-  integrations/       level thumbnails, optional mod integrations
+  levels/             level library, map packs and online lists for song select
+  integrations/       level thumbnails, Ventilla, optional mod integrations
   settings/           settings content, account actions, GD option mapping
-  ui/core/            shared building blocks: easing, text, rounded boxes, scroll areas
-  ui/menu/            logo, button system, background, toolbar, music card, account card
-  ui/overlays/        full-screen overlays and popup restyling
-  ui/select/          song select
+  ui/core/            shared building blocks: easing, text, rounded boxes, scroll areas, cursor
+  ui/menu/            main menu: logo, button system, background, toolbar, music card, account card
+  ui/overlays/        full-screen pages (level page, comments, paths, shops...), pause, results, popups
+  ui/select/          song select, for saved, map pack and online levels
   ui/startup/         loading screen and intro
   update/             self-updater (GitHub releases)
-tools/gen_icons.py    icon font generator
+tools/                icon font generator, Android install script
 ```
 
 ## Credits
 
 - UI sounds from [osu-resources](https://github.com/ppy/osu-resources) by ppy Pty Ltd, [CC-BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/), converted to Ogg Vorbis. The intro uses the opening of osu!'s "triangles" theme by cYsmix and the outro osu!'s "see you next time" line, from the same repository. This is why the mod must stay free.
+- The macOS port, its blur optimisation and the updater's checks are [souply](https://github.com/bradysonshine115-dev)'s work.
 - Motion and layout adapted from [osu!](https://github.com/ppy/osu) and [osu-framework](https://github.com/ppy/osu-framework) (MIT).
 - Font: [Outfit](https://github.com/Outfitio/Outfit-Fonts) (SIL Open Font License).
 - Icons: [Font Awesome Free](https://fontawesome.com/) (solid; icons CC BY 4.0, font SIL OFL).
