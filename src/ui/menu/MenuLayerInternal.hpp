@@ -69,9 +69,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
         lazer::SettingsOverlay* settings = nullptr;
         lazer::QuestsOverlay* quests = nullptr;
         lazer::LeaderboardsOverlay* leaderboards = nullptr;
-#ifdef GEODE_IS_MACOS
         lazer::FriendsOverlay* friends = nullptr;
-#endif
         lazer::PathsOverlay* paths = nullptr;
         lazer::AchievementsOverlay* achievements = nullptr;
         lazer::StatsOverlay* stats = nullptr;
@@ -94,9 +92,7 @@ class $modify(LazerMenuLayer, MenuLayer) {
     void toggleSettings();
     void toggleRewards();
     void toggleLeaderboards();
-#ifdef GEODE_IS_MACOS
     void toggleFriends();
-#endif
     void togglePaths();
     void toggleQuests();
     void toggleAchievements();

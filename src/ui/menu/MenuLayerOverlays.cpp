@@ -121,9 +121,7 @@ void LazerMenuLayer::toggleStats() {
 // Full-screen overlays replace each other, like osu!'s.
 void LazerMenuLayer::closeOverlaysExcept(CCNode* keep) {
     auto& f = m_fields;
-#ifdef GEODE_IS_MACOS
     if (f->friends && f->friends != keep) f->friends->close();
-#endif
     if (f->settings && f->settings != keep) f->settings->close();
     if (f->quests && f->quests != keep) f->quests->close();
     if (f->leaderboards && f->leaderboards != keep) f->leaderboards->close();
@@ -142,9 +140,7 @@ bool LazerMenuLayer::closeAllOverlays() {
             closed = true;
         }
     };
-#ifdef GEODE_IS_MACOS
     closeIf(f->friends);
-#endif
     closeIf(f->settings);
     closeIf(f->quests);
     closeIf(f->leaderboards);
@@ -168,7 +164,6 @@ void LazerMenuLayer::toggleNowPlaying() {
     if (nowPlaying->isOpen() && m_fields->ticker) m_fields->ticker->hide();
 }
 
-#ifdef GEODE_IS_MACOS
 void LazerMenuLayer::toggleFriends() {
     auto& friends = m_fields->friends;
     if (!friends) {
@@ -180,4 +175,3 @@ void LazerMenuLayer::toggleFriends() {
     if (friends->isOpen()) friends->close();
     else { closeOverlaysExcept(friends); friends->open(); }
 }
-#endif

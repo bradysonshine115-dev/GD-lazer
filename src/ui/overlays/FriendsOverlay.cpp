@@ -1,5 +1,4 @@
 #include "FriendsOverlay.hpp"
-#ifdef GEODE_IS_MACOS
 #include "../core/Text.hpp"
 using namespace geode::prelude;
 namespace lazer {
@@ -156,4 +155,3 @@ void FriendsOverlay::ccTouchEnded(CCTouch* touch, CCEvent* event) {
     WaveOverlay::ccTouchEnded(touch,event);
 }
 }
-#endif

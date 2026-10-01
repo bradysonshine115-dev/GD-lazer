@@ -1,6 +1,5 @@
 #pragma once
 #include <Geode/platform/platform.hpp>
-#ifdef GEODE_IS_MACOS
 #include "WaveOverlay.hpp"
 #include "../core/ScrollArea.hpp"
 #include <Geode/Geode.hpp>
@@ -42,4 +41,3 @@ private:
     std::string m_query, m_key;
 };
 }
-#endif
