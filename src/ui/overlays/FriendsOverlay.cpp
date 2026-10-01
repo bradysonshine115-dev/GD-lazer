@@ -52,7 +52,7 @@ void FriendsOverlay::clearRows() {
 }
 void FriendsOverlay::search() {
     if (m_loading) return;
-    auto query = m_search->getString();
+    std::string query = m_search->getString();
     auto first = query.find_first_not_of(" \t\r\n");
     if (first == std::string::npos) { m_status->setString("Enter a player name or user ID first."); return; }
     m_query = query.substr(first, query.find_last_not_of(" \t\r\n") - first + 1);
