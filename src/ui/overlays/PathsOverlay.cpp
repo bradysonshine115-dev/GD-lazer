@@ -21,6 +21,9 @@ namespace {
     constexpr float ROW_HEIGHT = 58, ROW_GAP = 6;
     constexpr float CARD_W = 84, CARD_H = 104, CARD_GAP = 8;
     constexpr int PATH_ITEM = 12;               // UnlockType::GJItem: a path is one of GD's "items"
+    // GD's item for path 1 is 6 (items 1 to 5 are other things): what buying
+    // a path unlocks, and what its store item (type 12, index 120 + path) names.
+    constexpr int PATH_ITEM_BASE = 5;
     constexpr int PATH_STAT_BASE = 29;          // StatKey::FirePath is 30: path 1
 
     bool nodeContains(CCNode* node, CCPoint world) {
@@ -96,7 +99,7 @@ PathsOverlay* PathsOverlay::create(float topInset) {
 }
 
 bool PathsOverlay::init(float topInset) {
-    if (!WaveOverlay::init(topInset, SCHEME, icon::ROUTE, "paths", "the orbs you collect go into a path, and each rank of it unlocks something")) return false;
+    if (!WaveOverlay::init(topInset, SCHEME, icon::ROUTE, "paths", "the stars and moons you earn go into a path, and each rank of it unlocks something")) return false;
     // GD's path art lives in its own sheet, loaded when its page opens.
     CCSpriteFrameCache::get()->addSpriteFramesWithFile("GJ_PathSheet.plist");
     m_pad = HORIZONTAL_PADDING * m_k;
@@ -124,7 +127,7 @@ int PathsOverlay::points(int path) const {
 }
 
 bool PathsOverlay::unlocked(int path) const {
-    return GameStatsManager::sharedState()->isItemUnlocked(static_cast<UnlockType>(PATH_ITEM), path);
+    return GameStatsManager::sharedState()->isItemUnlocked(static_cast<UnlockType>(PATH_ITEM), PATH_ITEM_BASE + path);
 }
 
 bool PathsOverlay::active(int path) const {
@@ -136,7 +139,7 @@ bool PathsOverlay::chestClaimed(int path) const {
 }
 
 GJStoreItem* PathsOverlay::storeItem(int path) const {
-    return GameStatsManager::sharedState()->getStoreItem(path, PATH_ITEM);
+    return GameStatsManager::sharedState()->getStoreItem(PATH_ITEM_BASE + path, PATH_ITEM);
 }
 
 std::string PathsOverlay::pathName(int path) const {
@@ -369,7 +372,7 @@ void PathsOverlay::rebuildCards() {
         label->setPosition({cw / 2, 26 * k});
         label->setColor(got || next ? theme::CONTENT1 : theme::FOREGROUND1);
         card.node->addChild(label, 2);
-        std::string need = chest ? "rank 10" : i == 0 ? "" : fmt::format("{} orbs", withCommas(i * POINTS_PER_RANK));
+        std::string need = chest ? "rank 10" : i == 0 ? "" : fmt::format("{} stars", withCommas(i * POINTS_PER_RANK));
         auto needLabel = makeText(need.empty() ? " " : need, Weight::Regular, 10 * k);
         needLabel->setPosition({cw / 2, 12 * k});
         needLabel->setColor(theme::FOREGROUND1);
@@ -437,15 +440,15 @@ void PathsOverlay::refreshDetail() {
         hint = "every rank of this path is yours";
     } else if (isActive) {
         status = fmt::format("active  ·  rank {} of {}", r, RANKS);
-        hint = "orbs you collect in levels go into this path";
+        hint = "stars and moons you earn go into this path";
     } else {
         status = fmt::format("rank {} of {}", r, RANKS);
-        hint = "make it active and the orbs you collect count towards it";
+        hint = "make it active and the stars and moons you earn count towards it";
     }
     m_status->setString(status.c_str());
     m_hint->setString(hint.c_str());
     fitWidth(m_hint, m_detailWidth - 250 * k);
-    m_pointsLabel->setString(open ? fmt::format("{} / {} orbs", withCommas(pts), withCommas(RANKS * POINTS_PER_RANK)).c_str() : " ");
+    m_pointsLabel->setString(open ? fmt::format("{} / {} stars and moons", withCommas(pts), withCommas(RANKS * POINTS_PER_RANK)).c_str() : " ");
     m_pointsLabel->setColor(isActive ? theme::rgb(m_scheme.highlight1()) : theme::CONTENT1);
 
     for (int i = 0; i < RANKS; i++) {
