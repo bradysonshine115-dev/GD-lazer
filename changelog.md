@@ -9,6 +9,7 @@
 - The menu's background blur is cheaper: both blur passes run at a quarter of the screen with half the texture reads, and a level image that has finished fading in keeps its blur instead of being blurred again every frame. Macs went from 20 to 60 fps on the menu (thanks souply)
 - Updating from Lazer settings checks the download is this mod at that version, for this platform, GD and Geode, before it replaces the installed one (thanks souply)
 - Paths: a path you haven't bought is locked until you buy it (it was looked up under the wrong item, so bought and unbought paths could swap), and the page says stars and moons, not orbs, since those are what fill a path (thanks Gecko7030 for the report)
+- Search: buttons other mods add to GD's search screen (Integrated Demonlist's, Level Grind's...) sit after refresh on the search page (thanks L4mbads for the suggestion)
 - Fixed: crash on Settings > Audio > Soundtracks (thanks 1mercdev for the report)
 - Fixed: the pause menu staying up (and piling up) after unpausing with a key such as space, with Custom Keybinds (thanks 1mercdev for the report)
 - Fixed: the search page's demon kind (easy to extreme) had no effect, every demon came back (thanks TraesherHDx for the report)

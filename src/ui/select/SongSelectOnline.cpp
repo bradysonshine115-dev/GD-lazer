@@ -3,8 +3,13 @@
 #include "../../audio/Sfx.hpp"
 #include "../core/MenuCursor.hpp"
 #include "../core/Theme.hpp"
+#include "../menu/Toolbar.hpp"
+#include "../overlays/GameplayButtons.hpp"
+
+#include <Geode/binding/LevelSearchLayer.hpp>
 
 #include <algorithm>
+#include <functional>
 
 using namespace geode::prelude;
 
@@ -18,6 +23,54 @@ namespace lazer {
 // moves between its pages.
 
 namespace {
+    // Buttons other mods add to GD's search screen (Level Grind's, ...): GD's
+    // screen is never shown, so they move to the search page. Found in a
+    // fresh hidden LevelSearchLayer by their path of child indices, which is
+    // the same in every fresh one (see the creator hub's mod buttons).
+    struct SearchModButton {
+        std::vector<unsigned> path;
+        std::string id;
+        CCSprite* image = nullptr; // a copy of the button's own picture
+    };
+
+    std::vector<SearchModButton> scanSearchModButtons(CCNode* layer) {
+        std::vector<SearchModButton> found;
+        std::vector<unsigned> path;
+        std::function<void(CCNode*, bool)> walk = [&](CCNode* node, bool inMenu) {
+            unsigned i = 0;
+            for (auto child : CCArrayExt<CCNode*>(node->getChildren())) {
+                path.push_back(i++);
+                if (auto item = typeinfo_cast<CCMenuItem*>(child); item && inMenu) {
+                    if (item->isVisible() && isModButton(item)) {
+                        CCNode* image = nullptr;
+                        if (auto sprite = typeinfo_cast<CCMenuItemSprite*>(item)) image = sprite->getNormalImage();
+                        found.push_back({path, item->getID(), image ? snapshotNode(image) : nullptr});
+                    }
+                } else if (child->isVisible()) {
+                    walk(child, inMenu || typeinfo_cast<CCMenu*>(child));
+                }
+                path.pop_back();
+            }
+        };
+        walk(layer, false);
+        return found;
+    }
+
+    // Presses a mod's search button in a fresh hidden search screen (its
+    // handler may use the screen).
+    void searchModAction(std::vector<unsigned> const& path) {
+        static Ref<LevelSearchLayer> layer;
+        layer = LevelSearchLayer::create(0);
+        if (!layer) return;
+        CCNode* node = layer;
+        for (auto i : path) {
+            auto children = node->getChildren();
+            if (!children || i >= children->count()) return;
+            node = static_cast<CCNode*>(children->objectAtIndex(i));
+        }
+        if (auto item = typeinfo_cast<CCMenuItem*>(node)) item->activate();
+    }
+
     struct PageText {
         char const* icon;
         char const* title;
@@ -237,10 +290,39 @@ void SongSelect::buildOnlineFilter() {
     m_filtersButton = m_buttons.size() - 1;
     m_filtersLabel = labelOf(filters.node);
     x += filters.node->getContentSize().width + 6 * k;
-    addIconButton(m_buttons, this, icon::ROTATE, {x, rowY}, 28 * k, TAB, [this] {
+    auto& refresh = addIconButton(m_buttons, this, icon::ROTATE, {x, rowY}, 28 * k, TAB, [this] {
         closeMenu();
         browse::refresh();
     });
+    x += refresh.node->getContentSize().width + 6 * k;
+
+    // Other mods' buttons on GD's search screen, after GD's own controls.
+    if (m_request.searchPage) {
+        if (auto scanned = Ref(LevelSearchLayer::create(0))) {
+            for (auto& button : scanSearchModButtons(scanned)) {
+                log::debug("Search page mod button: {}", button.id);
+                float h = 28 * k;
+                if (x + h * 1.3f > xRight) break; // out of room on a narrow screen
+                auto& b = addIconButton(m_buttons, this, nullptr, {x, rowY}, h, TAB, [this, path = button.path] {
+                    closeMenu();
+                    searchModAction(path);
+                });
+                if (button.image) {
+                    // The mod's own picture in place of a glyph, fitted in.
+                    auto bounds = button.image->getScaledContentSize();
+                    float fit = std::max(bounds.width, bounds.height);
+                    if (fit > 0) button.image->setScale(button.image->getScale() * h * 0.72f / fit);
+                    button.image->setPosition(b.node->getContentSize() / 2);
+                    b.node->addChild(button.image, 1);
+                } else {
+                    auto glyph = makeIcon(icon::PUZZLE, h * 0.42f);
+                    glyph->setPosition(b.node->getContentSize() / 2);
+                    b.node->addChild(glyph, 1);
+                }
+                x += b.node->getContentSize().width + 6 * k;
+            }
+        }
+    }
     updateOnlineLabels();
 }
 
