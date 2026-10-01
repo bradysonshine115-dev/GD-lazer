@@ -66,6 +66,10 @@ namespace songselect {
     // thread, so wait for the details too: the frame that stalls is a still one.
     inline constexpr float LEVEL_LOAD_AT = 1000;
 
+    // Online: typing waits this long before asking GD; a filter a little less.
+    inline constexpr float ONLINE_QUERY_DEBOUNCE = 350;
+    inline constexpr float ONLINE_FILTER_DEBOUNCE = 150;
+
     inline constexpr ccColor4B PANEL_BG {36, 34, 44, 235};
     inline constexpr ccColor4B PANEL_HOVER {58, 54, 72, 245};
     inline constexpr ccColor4B PINK {238, 51, 153, 255};
@@ -92,6 +96,40 @@ namespace songselect {
     // The next preview of that song uses it; any other preview drops it.
     struct Resume { std::string path; unsigned ms = 0; };
     extern Resume g_resume;
+
+    // The quick searches GD's search screen offers: the search page's sorts.
+    struct SortDef {
+        char const* label;
+        char const* icon;
+        SearchType type;
+    };
+    inline constexpr SortDef SORTS[] = {
+        {"most downloaded", icon::CLOUD_DOWN, SearchType::Downloaded},
+        {"most liked", icon::THUMBS_UP, SearchType::MostLiked},
+        {"trending", icon::BOLT, SearchType::Trending},
+        {"recent", icon::CLOCK, SearchType::Recent},
+        {"magic", icon::WAND_MAGIC, SearchType::Magic},
+        {"awarded", icon::MEDAL, SearchType::Awarded},
+    };
+
+    // The filter rows (GD's search screen's options), as rows of chips.
+    enum FilterRow { FILTER_DIFFICULTY, FILTER_DEMON, FILTER_LENGTH, FILTER_RATING, FILTER_EXTRAS, FILTER_PLAYED, FILTER_ROW_COUNT };
+    struct FilterRowDef {
+        char const* label;
+        std::array<char const*, 8> options;
+        int count;
+        bool multi;
+    };
+    inline constexpr FilterRowDef FILTER_ROWS[FILTER_ROW_COUNT] = {
+        // In GameLevelManager::getDifficultyStr's order.
+        {"difficulty", {"N/A", "easy", "normal", "hard", "harder", "insane", "demon", "auto"}, 8, true},
+        {"demon", {"any", "easy", "medium", "hard", "insane", "extreme"}, 6, false},
+        // In getLengthStr's order.
+        {"length", {"tiny", "short", "medium", "long", "XL", "platformer"}, 6, true},
+        {"rating", {"rated", "unrated", "featured", "epic", "legendary", "mythic"}, 6, true},
+        {"extras", {"original", "coins", "two player"}, 3, true},
+        {"played", {"any", "uncompleted", "completed"}, 3, false},
+    };
 
     // Platformer times, GD style: 1:23.456 (or 23.456 under a minute).
     inline std::string formatTime(int ms) {
@@ -218,12 +256,12 @@ namespace songselect {
     }
 
     // RobTop's levels have bundled screenshots (their IDs mean other levels
-    // online); saved levels come from the Level Thumbnails server.
-    inline void levelThumbnail(levels::Entry const& e, std::function<void(CCTexture2D*)> callback,
-                        std::function<bool()> wanted = nullptr) {
+    // online); saved levels come from the Level Thumbnails server. `packs` is
+    // the pack (or list) rows' source, for a header's picture.
+    inline void levelThumbnail(levels::Entry const& e, std::vector<packs::Pack> const& packs,
+                               std::function<void(CCTexture2D*)> callback, std::function<bool()> wanted = nullptr) {
         if (e.packHeader) {
             // A pack has no picture of its own: its first level's stands in.
-            auto& packs = packs::all();
             if (e.pack < 0 || static_cast<size_t>(e.pack) >= packs.size() || packs[e.pack].levelIDs.empty()) return;
             thumbnails::fetch(packs[e.pack].levelIDs.front(), std::move(callback), std::move(wanted));
             return;
@@ -265,13 +303,6 @@ namespace songselect {
     }};
     inline size_t pickLine(std::string const& seed, size_t count) {
         return std::hash<std::string> {}(seed) % count;
-    }
-
-    // The pack an entry belongs to (a header, or one of its levels), or null.
-    inline packs::Pack* packOf(levels::Entry const& e) {
-        auto& packs = packs::all();
-        if (e.pack < 0 || static_cast<size_t>(e.pack) >= packs.size()) return nullptr;
-        return &packs[e.pack];
     }
 
     inline bool containsWorld(CCNode* node, CCPoint world) {

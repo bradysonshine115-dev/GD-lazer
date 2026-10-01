@@ -40,6 +40,13 @@ struct Entry {
 // An entry for any level object (a pack's levels, fetched online).
 Entry fromLevel(GJGameLevel* level, bool official);
 
+// Your saved copy of a level carries its data and your progress. GD also
+// keeps nameless stubs for levels you've played but not saved: those only
+// lend their progress to the fetched copy, which is returned.
+GJGameLevel* withSavedCopy(GJGameLevel* level);
+// Whether the level object is your saved copy (its data and progress are kept).
+bool isSaved(GJGameLevel* level);
+
 // all() only reads what filtering and sorting need, so song select opens fast
 // with thousands of saved levels. Whether the song is downloaded (a file check
 // per level) and which coins you have are filled in here, once a level is
@@ -48,7 +55,8 @@ void resolve(Entry& entry);
 
 // GD 2.2 has two kinds of level: classic (stars) and platformer (moons).
 // MapPacks: RobTop's map packs, each a header with its levels under it.
-enum class Kind { Classic, Platformer, MapPacks };
+// Online: GD's online lists (see OnlineBrowse.hpp), nothing from here.
+enum class Kind { Classic, Platformer, MapPacks, Online };
 
 // RobTop's levels of that kind in order, then every saved online level of that kind.
 // Classic: the main levels. Platformer: the Tower's levels (vanilla hides them

@@ -113,9 +113,26 @@ Entry fromLevel(GJGameLevel* level, bool official) {
     return make(level, official);
 }
 
+GJGameLevel* withSavedCopy(GJGameLevel* level) {
+    auto saved = GameLevelManager::sharedState()->getSavedLevel(level->m_levelID.value());
+    if (!saved || saved == level) return level;
+    if (!std::string(saved->m_levelName).empty()) return saved;
+    if (saved->m_normalPercent.value() > level->m_normalPercent.value()) level->m_normalPercent = saved->m_normalPercent.value();
+    if (saved->m_practicePercent > level->m_practicePercent) level->m_practicePercent = saved->m_practicePercent;
+    if (saved->m_attempts.value() > level->m_attempts.value()) level->m_attempts = saved->m_attempts.value();
+    if (saved->m_jumps.value() > level->m_jumps.value()) level->m_jumps = saved->m_jumps.value();
+    return level;
+}
+
+bool isSaved(GJGameLevel* level) {
+    if (!level) return false;
+    auto saved = GameLevelManager::sharedState()->getSavedLevel(level->m_levelID.value());
+    return saved == level && !std::string(saved->m_levelName).empty();
+}
+
 std::vector<Entry> all(Kind kind) {
     std::vector<Entry> entries;
-    if (kind == Kind::MapPacks) return entries; // see MapPacks.hpp
+    if (kind == Kind::MapPacks || kind == Kind::Online) return entries; // see MapPacks.hpp, OnlineBrowse.hpp
     auto glm = GameLevelManager::sharedState();
     bool platformer = kind == Kind::Platformer;
 

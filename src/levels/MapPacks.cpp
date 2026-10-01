@@ -37,20 +37,6 @@ namespace {
         return out;
     }
 
-    // Your saved copy of a level carries its data and your progress. GD also
-    // keeps nameless stubs for levels you've played but not saved: those only
-    // lend their progress to the fetched copy.
-    GJGameLevel* withSavedCopy(GJGameLevel* level) {
-        auto saved = GameLevelManager::sharedState()->getSavedLevel(level->m_levelID.value());
-        if (!saved || saved == level) return level;
-        if (!std::string(saved->m_levelName).empty()) return saved;
-        if (saved->m_normalPercent.value() > level->m_normalPercent.value()) level->m_normalPercent = saved->m_normalPercent.value();
-        if (saved->m_practicePercent > level->m_practicePercent) level->m_practicePercent = saved->m_practicePercent;
-        if (saved->m_attempts.value() > level->m_attempts.value()) level->m_attempts = saved->m_attempts.value();
-        if (saved->m_jumps.value() > level->m_jumps.value()) level->m_jumps = saved->m_jumps.value();
-        return level;
-    }
-
     Pack makePack(GJMapPack* pack) {
         Pack p;
         p.pack = pack;
@@ -180,7 +166,7 @@ namespace {
                 if (!level) continue;
                 auto it = owner.find(level->m_levelID.value());
                 if (it == owner.end()) continue;
-                level = withSavedCopy(level);
+                level = levels::withSavedCopy(level);
                 auto e = levels::fromLevel(level, false);
                 e.pack = static_cast<int>(it->second);
                 found[it->second].push_back(std::move(e));
@@ -326,7 +312,7 @@ void refresh(Pack& p) {
     p.claimed = GameStatsManager::sharedState()->hasCompletedMapPack(p.id);
     // A level's saved copy appears once it's been played: pick it up.
     for (auto& e : p.levels) {
-        auto level = e.level ? withSavedCopy(e.level) : nullptr;
+        auto level = e.level ? levels::withSavedCopy(e.level) : nullptr;
         if (level && level != e.level.data()) {
             auto fresh = levels::fromLevel(level, false);
             fresh.pack = e.pack;

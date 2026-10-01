@@ -92,8 +92,9 @@ SongSelect::Panel& SongSelect::makePanel(size_t visibleIndex) {
         face->setPosition({stripW / 2, ph * 0.6f});
         root->addChild(face, 4);
         if (e.stars > 0) {
-            // A pack's stars are what finishing it gives.
-            auto stars = infoRow({{rewardIcon(e), (header ? "+" : "") + std::to_string(e.stars)}}, 12 * k, {255, 255, 255});
+            // A pack's stars are what finishing it gives (a list's diamonds).
+            char const* glyph = header && pack && pack->list ? icon::GEM : rewardIcon(e);
+            auto stars = infoRow({{glyph, (header ? "+" : "") + std::to_string(e.stars)}}, 12 * k, {255, 255, 255});
             stars->setPosition({(stripW - stars->getContentSize().width + 10 * k) / 2, ph * 0.17f});
             root->addChild(stars, 4);
         }
@@ -106,7 +107,7 @@ SongSelect::Panel& SongSelect::makePanel(size_t visibleIndex) {
         // The set panel: the pack's name in its own colour, how many of its
         // levels are done with a bar in the pack's colour, the reward's state,
         // and a chevron that turns as the pack opens.
-        auto tag = makeText("MAP PACK", Weight::SemiBold, 10 * k);
+        auto tag = makeText(pack && pack->list ? "LIST" : "MAP PACK", Weight::SemiBold, 10 * k);
         tag->setColor(accent);
         tag->setAnchorPoint({0, 0.5f});
         tag->setPosition({x + 1 * k, ph * 0.88f});
@@ -121,10 +122,13 @@ SongSelect::Panel& SongSelect::makePanel(size_t visibleIndex) {
         int total = pack ? static_cast<int>(pack->levelIDs.size()) : 0;
         int done = pack ? std::min(pack->completed, total) : 0;
         std::vector<std::pair<char const*, std::string>> info;
+        if (pack && pack->list) info.push_back({icon::USER, pack->creator});
         info.push_back({icon::LAYERS, fmt::format("{} level{}", total, total == 1 ? "" : "s")});
         info.push_back({total > 0 && done >= total ? icon::CHECK : nullptr, fmt::format("{}/{} done", done, total)});
         if (e.coins > 0) info.push_back({icon::COINS, "+" + std::to_string(e.coins)});
+        if (pack && pack->list) info.push_back({icon::CLOUD_DOWN, std::to_string(pack->downloads)});
         auto row = infoRow(info, 12 * k, theme::LIGHT1);
+        if (row->getContentSize().width > maxW) row->setScale(maxW / row->getContentSize().width);
         row->setPosition({x, ph * 0.4f});
         root->addChild(row, 4);
 
@@ -147,8 +151,8 @@ SongSelect::Panel& SongSelect::makePanel(size_t visibleIndex) {
         chevron = makeIcon(icon::CHEVRON_DOWN, 14 * k);
         chevron->setPosition({cx, ph / 2});
         root->addChild(chevron, 5);
-        if (pack && (packs::canClaim(*pack) || pack->claimed)) {
-            bool claim = packs::canClaim(*pack);
+        if (pack && (canClaimPack(*pack) || pack->claimed)) {
+            bool claim = canClaimPack(*pack);
             auto chip = infoRow({{claim ? icon::GIFT : icon::CHECK, claim ? "reward!" : "claimed"}}, 12 * k,
                                 claim ? ccColor3B {255, 214, 76} : theme::LIGHT1);
             float chipW = chip->getContentSize().width;
@@ -317,7 +321,7 @@ void SongSelect::updateCarousel(float dt) {
                 auto stillWanted = [](Ref<RoundedBox> box) {
                     return [box] { return box->getParent() != nullptr; };
                 };
-                if (p.thumb) levelThumbnail(e, onTexture(p.thumb), stillWanted(p.thumb));
+                if (p.thumb) levelThumbnail(e, packList(), onTexture(p.thumb), stillWanted(p.thumb));
                 for (auto& t : p.tiles) thumbnails::fetch(t.levelID, onTexture(t.box), stillWanted(t.box));
             }
             if (p.thumb) {

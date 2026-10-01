@@ -58,7 +58,7 @@ void SongSelect::play(bool withSong) {
     if (e.packHeader || !e.level) return;
     m_withSong = withSong;
     sfx::play(sfx::sound::MENU_PLAY_SELECT);
-    closeFolders();
+    closeMenu();
     m_starting = true;
     m_pressed = nullptr;
     m_loaderLevel = e.level;
@@ -137,7 +137,7 @@ void SongSelect::buildLoader(levels::Entry const& e) {
     box->setShadow(12 * k, {0, 0, 0, 120});
     centred(main, box, 48 * k);
     Ref<RoundedBox> boxRef = box;
-    levelThumbnail(e, [boxRef](CCTexture2D* texture) {
+    levelThumbnail(e, packList(), [boxRef](CCTexture2D* texture) {
         if (texture && boxRef->getParent()) boxRef->setTexture(texture);
     });
     auto shade = RoundedBox::create(boxSize, 10 * k, {0, 0, 0, 110});
@@ -318,6 +318,8 @@ void SongSelect::updateLoader(float dt) {
                     dropLevel();
                     restorePreview();
                 }
+                // Results that arrived meanwhile.
+                if (m_browseDirty) onBrowseChanged();
                 return;
             }
             break;

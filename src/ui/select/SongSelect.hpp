@@ -2,6 +2,7 @@
 
 #include "../../levels/LevelLibrary.hpp"
 #include "../../levels/MapPacks.hpp"
+#include "../../levels/OnlineBrowse.hpp"
 #include "../core/Easing.hpp"
 #include "../core/RoundedBox.hpp"
 #include "../core/ScrollArea.hpp"
@@ -10,6 +11,7 @@
 #include <Geode/cocos/robtop/mouse_dispatcher/CCMouseDelegate.h>
 #include <functional>
 #include <map>
+#include <optional>
 #include <unordered_map>
 #include <string>
 #include <vector>
@@ -28,22 +30,34 @@ class MenuBackground;
 //   bottom: footer with back / random / level page / play
 // The selected level's song previews and its thumbnail becomes the blurred
 // background. Playing a level (or backing out of it) comes back here.
+//
+// Map packs (Kind::MapPacks) are the same screen with the packs as rows that
+// open into their levels; GD's online lists (Kind::Online: search, featured,
+// lists, hall of fame, magic, recent...) too, with the results fetched a page
+// at a time as they're scrolled to (see OnlineBrowse.hpp), a sort and filters
+// above the carousel, and a pager beside the count. Level lists open like
+// the packs.
 // (GD's CCLayer is already a CCMouseDelegate.)
 class SongSelect : public cocos2d::CCLayer, public CustomSongDelegate, public LeaderboardManagerDelegate,
-                   public LevelDownloadDelegate, public MusicDownloadDelegate {
+                   public LevelDownloadDelegate, public MusicDownloadDelegate, public TextInputDelegate {
 public:
     // From the main menu: the menu's song keeps playing, with its level selected.
     static cocos2d::CCScene* scene(levels::Kind kind);
     // The kind last opened (where gameplay and level pages return to).
     static cocos2d::CCScene* scene();
+    // One of GD's online lists as song select (the request starts loading,
+    // unless it's the one already shown, whose results are kept).
+    static cocos2d::CCScene* onlineScene(browse::Request const& request);
     static SongSelect* create(levels::Kind kind, bool fromMenu = false);
 
     // Set while the player came from song select, so leaving gameplay or GD's
     // level page returns here instead of GD's own screens.
     static bool& returnsHere();
     // Set while the player went from song select to GD's online screens: going
-    // back to GD's creator hub from them returns here (see main.cpp).
+    // back to GD's creator hub from them returns here (see CreatorHub.cpp).
     static bool& browsingOnline();
+    // The song select the online pages were opened from, to go back to.
+    static std::optional<levels::Kind>& onlineReturn();
 
     void update(float dt) override;
     void onEnter() override;
@@ -74,6 +88,11 @@ public:
     void levelDownloadFailed(int response) override;
     void downloadSongFailed(int id, GJSongError error) override;
     void loadSongInfoFailed(int id, GJSongError error) override { downloadSongFailed(id, error); }
+
+    // TextInputDelegate (the pager's page number).
+    void textInputOpened(CCTextInputNode* node) override;
+    void textInputClosed(CCTextInputNode* node) override;
+    void enterPressed(CCTextInputNode* node) override;
 
 protected:
     // Saved first: most players mostly play online levels.
@@ -122,6 +141,7 @@ protected:
     };
 
     bool init(levels::Kind kind, bool fromMenu);
+    bool onlineMode() const { return m_kind == levels::Kind::Online; }
     // Selects a level using the song at `path`, whose song ID (MusicPlayer's) is
     // `songID` (clearing the filters if they hide it).
     bool selectSong(std::string const& path, int songID);
@@ -130,12 +150,28 @@ protected:
     Button& addButton(std::vector<Button>& list, cocos2d::CCNode* parent, char const* glyph, std::string const& label,
                       cocos2d::CCPoint pos, float height, cocos2d::ccColor4B color, std::function<void()> action,
                       float skew = 0.f);
+    // Icon only: a small square-ish pill, the icon centred.
+    Button& addIconButton(std::vector<Button>& list, cocos2d::CCNode* parent, char const* glyph, cocos2d::CCPoint pos,
+                          float height, cocos2d::ccColor4B color, std::function<void()> action);
+    // A dropdown under a button (the folders, the online sort and filters):
+    // the node to fill (downwards from y 0), then finishMenu draws its box.
+    cocos2d::CCNode* openMenu(Button& anchor);
+    void finishMenu(float width, float height);
+    void closeMenu();
+    bool menuOpen() const { return m_menu != nullptr; }
     void applyFilter();
     // Reads the levels again (after deleting some) and re-applies the filters.
     void reloadEntries();
     // Map packs (Kind::MapPacks): the packs are the rows, and the open one has
     // its levels under it, like osu!'s beatmap sets and their difficulties.
-    bool packMode() const { return m_kind == levels::Kind::MapPacks; }
+    // Online level lists are shown the same way.
+    bool packMode() const { return m_kind == levels::Kind::MapPacks || (onlineMode() && m_onlineLists); }
+    // The packs (or the lists) the rows come from, and an entry's.
+    std::vector<packs::Pack>& packList();
+    packs::Pack* packOf(levels::Entry const& e);
+    void loadPackLevels(int index);
+    bool packLevelsLoading() const;
+    bool canClaimPack(packs::Pack const& p) const;
     // m_entries from the loaded packs: each header followed by its levels.
     void rebuildPackEntries();
     // The pack list or a pack's levels arrived (or failed).
@@ -184,7 +220,27 @@ protected:
     void browseOnline();
     void back();
     void toggleFolders();
-    void closeFolders();
+
+    // Online (Kind::Online, see SongSelectOnline.cpp): the request shown is
+    // m_request; its results come from the browse store.
+    void buildOnlineFilter();
+    void updateOnline(float dt);
+    void onBrowseChanged();
+    void rebuildOnlineEntries();
+    // Sends the request (as the controls have it) once the typing has stopped.
+    void queueOnlineSearch(float delayMs);
+    void applyOnlineRequest();
+    void openSortMenu();
+    void openFilterMenu();
+    void toggleFilterOption(int row, int option);
+    void updateOnlineLabels();
+    // The page (0-based) of the row in the middle of the view.
+    int currentPage() const;
+    // The pager: a loaded page scrolls into view, the next one loads, any
+    // other starts the results again from there.
+    void goToPage(int page);
+    bool scrollToPageIfLoaded(int page);
+    void commitPageInput();
     void confirmDeleteUnhearted();
     void confirmDeleteLevel();
     void loadLeaderboard();
@@ -222,6 +278,23 @@ protected:
     float m_panelH = 0, m_spacing = 0;
 
     levels::Kind m_kind = levels::Kind::Classic;
+    // Online: the request shown (edited by the controls) and its results' state.
+    browse::Request m_request;
+    bool m_onlineLists = false;
+    int m_browseGeneration = -1;
+    float m_onlineSearchDelay = -1;    // ms until the queued request goes (-1: none)
+    int m_pendingPage = -1;            // page to scroll to once it arrives
+    int m_shownPage = -1;              // in the pager's box
+    bool m_pageInputOpen = false;
+    bool m_pageCommitted = false;
+    bool m_browseDirty = false;        // results changed while the loader was up
+    geode::TextInput* m_pageInput = nullptr;
+    cocos2d::CCLabelBMFont* m_pageTotal = nullptr;
+    cocos2d::CCLabelBMFont* m_filtersLabel = nullptr;
+    cocos2d::CCNode* m_countSpinner = nullptr;
+    size_t m_sortButton = SIZE_MAX;    // index in m_buttons
+    size_t m_filtersButton = SIZE_MAX;
+    size_t m_pageButton = SIZE_MAX;    // the footer's level / list page button
     std::vector<levels::Entry> m_entries;
     std::vector<size_t> m_visible; // filtered + sorted entry indices
     size_t m_selected = 0;         // index into m_visible
@@ -279,11 +352,12 @@ protected:
     std::vector<Button> m_tabs;
     std::vector<Button> m_buttons; // footer + sort
     std::vector<Button> m_wedgeButtons; // heart, level options, leaderboard (rebuilt per level)
-    std::vector<Button> m_folderItems;  // the open folder dropdown
+    std::vector<Button> m_menuItems;    // the open dropdown's
     Button* m_pressed = nullptr;
-    size_t m_folderButton = 0;           // index in m_buttons
+    size_t m_folderButton = SIZE_MAX;    // index in m_buttons
     cocos2d::CCLabelBMFont* m_folderLabel = nullptr;
-    cocos2d::CCNode* m_folderMenu = nullptr;
+    cocos2d::CCNode* m_menu = nullptr;   // the open dropdown
+    Button* m_menuAnchor = nullptr;
     ScrollArea* m_details = nullptr;
     ScrollDragger m_detailsDrag;
     CustomSongWidget* m_songWidget = nullptr;

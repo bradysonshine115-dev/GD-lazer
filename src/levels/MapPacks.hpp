@@ -17,6 +17,13 @@ enum class State { Unloaded, Loading, Loaded, Failed };
 
 struct Pack {
     geode::Ref<GJMapPack> pack;
+    // An online level list, shown the same way (OnlineBrowse.hpp): its
+    // levels under it, its reward in diamonds.
+    geode::Ref<GJLevelList> list;
+    std::string creator;
+    int downloads = 0, likes = 0;
+    int diamonds = 0;              // a list's reward, for beating levelsToClaim of its levels
+    int levelsToClaim = 0;
     int id = 0;
     std::string name;
     int difficulty = 0;            // GJDifficultySprite frame (see levels::Entry)
