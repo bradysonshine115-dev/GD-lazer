@@ -106,7 +106,8 @@ None of these are required. The matching extras appear when a mod is installed.
 
 - **`early-load`** is set so the mod can restyle GD's loading screen from its first frame. Nothing else runs early. At that point the mod's own resources aren't loaded yet, so the loading screen is drawn entirely in code.
 - **GD layers run hidden.** Several overlays drive GD's own layers (RewardsPage, ChallengesPage, ProfilePage, InfoLayer, GJShopLayer, AccountLayer, CreatorLayer...) kept hidden and non-interactive, and call their handlers. GD's logic, networking and saving are never reimplemented.
-- **Networking:** level thumbnails, fetched from the Level Thumbnails community server (`levelthumbs.prevter.me`) and cached on disk, and the update check: `mod.json` and `changelog.md` from this repo's `main` branch, plus the GitHub release when you choose to update. No accounts, analytics or other requests.
+- **Networking:** level thumbnails, fetched from the Level Thumbnails community server (`levelthumbs.prevter.me`) and cached on disk, and the update check: `mod.json` and `changelog.md` from this repo's `main` branch, plus the GitHub release when you choose to update (it's checked to be this mod at that version, for this platform, GD and Geode, before it replaces the installed one). No accounts, analytics or other requests.
+- **The background blur** captures GD's scene or the level image at a quarter of the screen, blurs it there in two passes (horizontal, then vertical) and upscales the result. A settled level image keeps its blur rather than redoing it every frame; GD's live scene is recaptured every frame.
 - **Settings:** everything can be switched off. `enabled` turns the whole mod off; the intro/outro, music player, popup restyle, profile restyle, pause and results restyle (off by default), background dim, blur and triangles each have their own toggle.
 
 ## Building
@@ -136,20 +137,10 @@ cmake --build build-mac --parallel 4
 
 With GD closed, copy `build-mac/kamol1dn.lazer-ui.geode` into the mods
 folder opened by Geode's folder button, then restart GD. Install the required
-Image Plus and Custom Keybinds dependencies through Geode. Back up your save
-before testing this alpha mod.
+Image Plus and Custom Keybinds dependencies through Geode.
 
-The custom osu! cursor and Lazer graphics/parental dialogs currently remain
-Windows-only; macOS uses the system cursor and GD's own option dialogs.
-The updater checks platform, GD, and Geode compatibility before replacing an
-installed package, so an incompatible release cannot replace this port.
-
-On macOS, the background runs both Gaussian blur passes at quarter resolution before
-upscaling. Adjacent filter taps share bilinear samples, and a settled level
-image reuses its blurred texture between periodic refreshes. Animated GD
-backgrounds and image crossfades continue to refresh while they change.
-Windows and Android retain the original blur shader, full-screen vertical pass,
-and per-frame refresh behavior.
+The custom osu! cursor and Lazer's graphics and parental dialogs are
+Windows-only for now; macOS uses the system cursor and GD's own dialogs.
 
 **Releasing:** bump `version` in `mod.json`, rename the changelog's `## Unreleased` heading to that version (e.g. `## v0.3.0`), and push to `main`. The changelog section becomes the release notes, both on GitHub and in the in-game update prompt. CI builds it and publishes a GitHub release tagged with that version if none exists yet; installed copies see the new version on main and download that release.
 
