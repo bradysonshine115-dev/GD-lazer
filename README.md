@@ -4,6 +4,8 @@
 > **It is not intended for Geode's official mod index, and never will be.** Please do not submit it there or ask for it to be added.
 >
 > Builds come from this repo's source through GitHub Actions: grab the `.geode` from [Releases](https://github.com/kamol1dn/GD-lazer/releases) or the latest [Actions](https://github.com/kamol1dn/GD-lazer/actions) run. They aren't reviewed by Geode, so install manually and at your own risk.
+>
+> **How to install, step by step for Windows, Android and macOS: [INSTALL.md](INSTALL.md).**
 
 ## An apology
 
@@ -41,7 +43,7 @@ It replaces GD's menus, not its gameplay. GD's own screens and handlers still ru
 
 ## Platforms
 
-Windows, Android and macOS (Apple Silicon and Intel), all for GD 2.2081 and Geode 5.10.1. Every Actions run builds all three into one `.geode`. The osu! cursor is Windows-only; phones get tilt parallax instead of the mouse one. On macOS, Lazer's graphics and parental dialogs fall back to GD's own for now.
+Windows, Android and macOS (Apple Silicon and Intel), all for GD 2.2081 and Geode 5.10.1. Installing on each: [INSTALL.md](INSTALL.md). Every Actions run builds all three into one `.geode`. The osu! cursor is Windows-only; phones get tilt parallax instead of the mouse one. On macOS, Lazer's graphics and parental dialogs fall back to GD's own for now.
 
 ## Features
 
