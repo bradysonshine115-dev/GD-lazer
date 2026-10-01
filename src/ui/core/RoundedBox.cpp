@@ -221,7 +221,10 @@ void RoundedBox::draw() {
     glVertexAttribPointer(kCCVertexAttrib_Position, 2, GL_FLOAT, GL_FALSE, 0, verts);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
+#ifndef GEODE_IS_MACOS
+    // macOS GD does not export cocos2d's diagnostic draw counter.
     CC_INCREMENT_GL_DRAWS(1);
+#endif
 }
 
 } // namespace lazer

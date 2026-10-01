@@ -23,6 +23,15 @@ add_subdirectory($ENV{GEODE_SDK} ${CMAKE_CURRENT_BINARY_DIR}/geode)
 
 setup_geode_mod(${PROJECT_NAME})
 
+if (GEODE_TARGET_PLATFORM STREQUAL "MacOS")
+    # Sign both slices of the universal library before Geode packages it.
+    find_program(CODESIGN_EXECUTABLE codesign REQUIRED)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND "${CODESIGN_EXECUTABLE}" --force --sign - "$<TARGET_FILE:${PROJECT_NAME}>"
+        VERBATIM
+    )
+endif()
+
 if (ANDROID)
     # Tilt parallax reads the phone's sensors through the NDK (android/sensor.h).
     target_link_libraries(${PROJECT_NAME} android)

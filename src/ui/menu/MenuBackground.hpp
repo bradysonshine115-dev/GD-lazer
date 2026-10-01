@@ -33,6 +33,7 @@ public:
         CC_SAFE_RELEASE(m_rt);
         CC_SAFE_RELEASE(m_rt2);
         CC_SAFE_RELEASE(m_horizontal);
+        CC_SAFE_RELEASE(m_vertical);
     }
 
 protected:
@@ -47,10 +48,13 @@ protected:
     bool imageCoversScreen() const;
 
     cocos2d::CCNode* m_source = nullptr;
-    cocos2d::CCRenderTexture* m_rt = nullptr;  // quarter-size capture of the scene
+    cocos2d::CCRenderTexture* m_rt = nullptr;  // capture, then finished quarter-size blur
     cocos2d::CCRenderTexture* m_rt2 = nullptr; // after the horizontal blur pass
     cocos2d::CCSprite* m_horizontal = nullptr;
+    cocos2d::CCSprite* m_vertical = nullptr;
     cocos2d::CCSprite* m_blurred = nullptr;
+    bool m_captureDirty = true;
+    float m_captureAge = 0.f;
     cocos2d::CCLayerColor* m_dim = nullptr;
 
     // Level images, oldest first. Drawn over GD's scene; in blur mode they're
