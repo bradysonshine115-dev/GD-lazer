@@ -117,7 +117,10 @@ void Triangles::draw() {
     glVertexAttribPointer(kCCVertexAttrib_Position, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), &m_vertices[0].pos);
     glVertexAttribPointer(kCCVertexAttrib_Color, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(Vertex), &m_vertices[0].color);
     glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(m_vertices.size()));
+#ifndef GEODE_IS_MACOS
+    // macOS GD does not export cocos2d's diagnostic draw counter.
     CC_INCREMENT_GL_DRAWS(1);
+#endif
 }
 
 } // namespace lazer

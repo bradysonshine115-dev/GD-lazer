@@ -2,6 +2,7 @@
 	"geode": "5.10.1",
 	"gd": {
 		"win": "2.2081",
+		"mac": "2.2081",
 		"android": "2.2081"
 	},
 	"id": "kamol1dn.lazer-ui",
@@ -202,6 +203,7 @@
 			"description": "Size of the menus, in percent. Phones default to a bigger UI since their screens are small. Takes effect next time the menu loads.",
 			"default": {
 				"win": 100,
+				"mac": 100,
 				"android": 150
 			},
 			"min": 50,

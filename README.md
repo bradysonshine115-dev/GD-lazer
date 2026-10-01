@@ -121,6 +121,34 @@ cmake --build build --config RelWithDebInfo
 
 The build installs the `.geode` into your GD mods folder.
 
+### macOS
+
+The macOS build targets GD 2.2081 and Geode 5.10.1. It produces a universal
+binary for Apple Silicon and Intel Macs. Install Apple's Command Line Tools,
+CMake, and the Geode CLI, then point `GEODE_SDK` at the SDK checkout:
+
+```sh
+geode sdk install-binaries --platform mac --version 5.10.1
+cmake -S . -B build-mac -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DGEODE_TARGET_PLATFORM=MacOS -DGEODE_DONT_INSTALL_MODS=ON
+cmake --build build-mac --parallel 4
+```
+
+With GD closed, copy `build-mac/kamol1dn.lazer-ui.geode` into the mods
+folder opened by Geode's folder button, then restart GD. Install the required
+Image Plus and Custom Keybinds dependencies through Geode. Back up your save
+before testing this alpha mod.
+
+The custom osu! cursor and Lazer graphics/parental dialogs currently remain
+Windows-only; macOS uses the system cursor and GD's own option dialogs.
+The updater checks platform, GD, and Geode compatibility before replacing an
+installed package, so an incompatible release cannot replace this port.
+
+The background runs both Gaussian blur passes at quarter resolution before
+upscaling. Adjacent filter taps share bilinear samples, and a settled level
+image reuses its blurred texture between periodic refreshes. Animated GD
+backgrounds and image crossfades continue to refresh while they change.
+
 **Releasing:** bump `version` in `mod.json`, rename the changelog's `## Unreleased` heading to that version (e.g. `## v0.3.0`), and push to `main`. The changelog section becomes the release notes, both on GitHub and in the in-game update prompt. CI builds it and publishes a GitHub release tagged with that version if none exists yet; installed copies see the new version on main and download that release.
 
 Icon glyphs are baked into a bitmap font at build time. To add one, list it in `tools/gen_icons.py` and run it: the script updates both `src/ui/core/Text.hpp` and the charset in `mod.json`.

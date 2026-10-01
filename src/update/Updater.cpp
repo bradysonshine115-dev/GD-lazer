@@ -205,6 +205,16 @@ namespace {
                     error = "the download isn't a valid .geode";
                 } else if (meta.getID() != Mod::get()->getID()) {
                     error = "the download is a different mod";
+                } else if (meta.getVersion() != VersionInfo::parse(version).unwrap()) {
+                    error = "the download is a different version";
+                } else if (auto supported = meta.checkPlatformSupported(); !supported) {
+                    error = supported.unwrapErr();
+                } else if (auto compatible = meta.checkGameVersion(); !compatible) {
+                    error = compatible.unwrapErr();
+                } else if (auto compatible = meta.checkGeodeVersion(); !compatible) {
+                    error = compatible.unwrapErr();
+                } else if (auto archive = file::Unzip::create(temp); !archive || !archive.unwrap().hasEntry(meta.getBinaryName().data())) {
+                    error = "the download has no binary for this platform";
                 } else {
                     std::error_code ec;
                     std::filesystem::rename(temp, target, ec);
