@@ -144,10 +144,12 @@ Windows-only; macOS uses the system cursor and GD's own option dialogs.
 The updater checks platform, GD, and Geode compatibility before replacing an
 installed package, so an incompatible release cannot replace this port.
 
-The background runs both Gaussian blur passes at quarter resolution before
+On macOS, the background runs both Gaussian blur passes at quarter resolution before
 upscaling. Adjacent filter taps share bilinear samples, and a settled level
 image reuses its blurred texture between periodic refreshes. Animated GD
 backgrounds and image crossfades continue to refresh while they change.
+Windows and Android retain the original blur shader, full-screen vertical pass,
+and per-frame refresh behavior.
 
 **Releasing:** bump `version` in `mod.json`, rename the changelog's `## Unreleased` heading to that version (e.g. `## v0.3.0`), and push to `main`. The changelog section becomes the release notes, both on GitHub and in the in-game update prompt. CI builds it and publishes a GitHub release tagged with that version if none exists yet; installed copies see the new version on main and download that release.
 

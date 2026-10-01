@@ -43,6 +43,7 @@ void main() {
 
     // One direction of a separable Gaussian blur (sigma = 4 texels of the
     // quarter-resolution capture); run horizontally, then vertically.
+#ifdef GEODE_IS_MACOS
     constexpr auto BLUR_FRAG = R"(
 #ifdef GL_ES
 precision mediump float;
@@ -70,6 +71,31 @@ void main() {
     gl_FragColor = sum * v_fragmentColor;
 }
 )";
+#else
+    constexpr auto BLUR_FRAG = R"(
+#ifdef GL_ES
+precision mediump float;
+#endif
+varying vec4 v_fragmentColor;
+varying vec2 v_texCoord;
+uniform sampler2D CC_Texture0;
+uniform vec2 u_step; // one texel along the blur direction
+
+const float SIGMA = 4.0;
+
+void main() {
+    vec4 sum = vec4(0.0);
+    float total = 0.0;
+    for (int i = -10; i <= 10; i++) {
+        float x = float(i);
+        float w = exp(-x * x / (2.0 * SIGMA * SIGMA));
+        sum += texture2D(CC_Texture0, v_texCoord + u_step * x) * w;
+        total += w;
+    }
+    gl_FragColor = sum / total * v_fragmentColor;
+}
+)";
+#endif
 }
 
 CCGLProgram* MenuBackground::blurProgram() {
@@ -129,6 +155,7 @@ bool MenuBackground::init(CCNode* source, float dim, bool blur, bool triangles) 
             m_horizontal->setAnchorPoint({0, 0});
             m_horizontal->setShaderProgram(blurProgram());
 
+#ifdef GEODE_IS_MACOS
             // Vertical pass: second texture -> first texture, reusing the
             // capture once the horizontal pass has finished reading it.
             m_vertical = CCSprite::createWithTexture(m_rt2->getSprite()->getTexture());
@@ -145,6 +172,17 @@ bool MenuBackground::init(CCNode* source, float dim, bool blur, bool triangles) 
             m_blurred->setScaleY(win.height / m_blurred->getContentSize().height);
             this->addChild(m_blurred, 0);
 
+#else
+            // Vertical pass: second texture -> screen.
+            m_blurred = CCSprite::createWithTexture(m_rt2->getSprite()->getTexture());
+            m_blurred->setFlipY(true); // render textures are upside down
+            m_blurred->setPosition(win / 2);
+            m_blurred->setScaleX(win.width / m_blurred->getContentSize().width);
+            m_blurred->setScaleY(win.height / m_blurred->getContentSize().height);
+            m_blurred->setShaderProgram(blurProgram());
+            this->addChild(m_blurred, 0);
+
+#endif
             source->setVisible(false);
         } else {
             CC_SAFE_RELEASE_NULL(m_rt);
@@ -281,7 +319,11 @@ void MenuBackground::onExit() {
 void MenuBackground::visit() {
     if (!this->isVisible()) return;
 
-    if (m_rt && m_source && (m_captureDirty || !imageCoversScreen() || m_captureAge >= 1.f)) {
+    if (m_rt && m_source
+#ifdef GEODE_IS_MACOS
+        && (m_captureDirty || !imageCoversScreen() || m_captureAge >= 1.f)
+#endif
+    ) {
         // Draw GD's live menu scene (unless a level image hides it) and the
         // level images into the small texture...
         bool covered = imageCoversScreen();
@@ -314,6 +356,7 @@ void MenuBackground::visit() {
         m_horizontal->visit();
         m_rt2->end();
 
+#ifdef GEODE_IS_MACOS
         // ...and vertically at quarter resolution, rather than running the
         // blur shader over every full-screen pixel on every frame.
         program->use();
@@ -323,6 +366,11 @@ void MenuBackground::visit() {
         m_rt->end();
         m_captureDirty = false;
         m_captureAge = 0.f;
+#else
+        // ...and vertically on the way to the screen (m_blurred, drawn below).
+        program->use();
+        glUniform2f(step, 0.f, 1.f / tex->getPixelsHigh());
+#endif
     }
 
     CCNode::visit();
