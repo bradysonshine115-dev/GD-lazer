@@ -119,36 +119,6 @@ None of these are required. The matching extras appear when a mod is installed.
 - **The background blur** captures GD's scene or the level image at a quarter of the screen, blurs it there in two passes and upscales the result. A settled level image keeps its blur instead of redoing it every frame.
 - **Settings:** everything can be switched off. `enabled` turns the whole mod off; the intro and outro, music player, popup restyle, profile restyle, pause and results restyle, background dim, blur, triangles, parallax and cursor each have their own setting.
 
-## Building
-
-Requires the [Geode SDK](https://docs.geode-sdk.org/) (v5.10.1) and its CLI.
-
-**Windows:**
-
-```bash
-geode sdk install-binaries
-cmake -B build -A x64
-cmake --build build --config RelWithDebInfo
-```
-
-The build installs the `.geode` into your GD mods folder.
-
-**macOS** (a universal binary for Apple Silicon and Intel; needs Apple's Command Line Tools and CMake):
-
-```bash
-geode sdk install-binaries --platform mac --version 5.10.1
-cmake -S . -B build-mac -DCMAKE_BUILD_TYPE=RelWithDebInfo -DGEODE_TARGET_PLATFORM=MacOS -DGEODE_DONT_INSTALL_MODS=ON
-cmake --build build-mac --parallel 4
-```
-
-With GD closed, copy `build-mac/kamol1dn.lazer-ui.geode` into the mods folder opened by Geode's folder button.
-
-**Android:** CI builds both Android targets with NDK r29 (29.0.14206865). Newer NDKs link against a libc++ symbol that Geode's `libc++_shared.so` lacks.
-
-**Releasing:** write the changes under the next version's heading in `changelog.md` (e.g. `## v0.6.1`), then set `version` in `mod.json` to it and push to `main`. CI builds it and publishes a GitHub release for that version if none exists yet, with the changelog section as its notes. Installed copies see the new version on main and offer to download it.
-
-Icon glyphs are baked into a bitmap font at build time. To add one, list it in `tools/gen_icons.py` and run it: the script updates both `src/ui/core/Text.hpp` and the charset in `mod.json`.
-
 ## Source layout
 
 ```
