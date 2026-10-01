@@ -2,6 +2,7 @@
 
 ## v0.6.1
 
+- Levels open on their own page instead of GD's: the level's picture across the top with its rating, difficulty, stars, coins, song, downloads and likes, then play (GD downloads it first if it must), heart, like, comments, add to list, copy the ID and the song's download; below, its description, details (creator, song, length, objects, version, when it was uploaded), your progress (normal and practice, or a platformer's best time, with attempts, jumps and orbs) and its scores (top, this week or friends, loaded on request since that also uploads your best). "GD's page" shows the real thing for anything else
 - Ventilla support: with JoseII's Ventilla installed, its live radio can be the menu's music instead of your levels' songs. The music player gets a radio button to switch between the two, shows the stream's current track, and the logo's visualiser follows the radio; Settings > Audio has the same switch and Ventilla's own options as rows of their own: the radio's volume and fade, where else it plays (levels, practice, the pause menu, the editor, the background, GD's shops and secret rooms) and its buttons (thanks BlueCrafter12 for the suggestion)
 - Fixed: crash on Settings > Audio > Soundtracks (thanks 1mercdev for the report)
 - Fixed: the pause menu staying up (and piling up) after unpausing with a key such as space, with Custom Keybinds (thanks 1mercdev for the report)

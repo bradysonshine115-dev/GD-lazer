@@ -33,6 +33,7 @@ namespace icon {
     constexpr auto VOLUME = "\xEF\x80\xA8";         // f028
     constexpr auto BOOKMARK = "\xEF\x80\xAE";       // f02e
     constexpr auto LIST = "\xEF\x80\xBA";           // f03a
+    constexpr auto IMAGE = "\xEF\x80\xBE";          // f03e
     constexpr auto STEP_BACKWARD = "\xEF\x81\x88";  // f048
     constexpr auto PLAY = "\xEF\x81\x8B";           // f04b
     constexpr auto STEP_FORWARD = "\xEF\x81\x91";   // f051
@@ -47,6 +48,7 @@ namespace icon {
     constexpr auto EYE = "\xEF\x81\xAE";            // f06e
     constexpr auto TRIANGLE_EXCLAMATION = "\xEF\x81\xB1";// f071
     constexpr auto SHUFFLE = "\xEF\x81\xB4";        // f074
+    constexpr auto CHEVRON_UP = "\xEF\x81\xB7";     // f077
     constexpr auto CHEVRON_DOWN = "\xEF\x81\xB8";   // f078
     constexpr auto FOLDER = "\xEF\x81\xBB";         // f07b
     constexpr auto FOLDER_OPEN = "\xEF\x81\xBC";    // f07c
@@ -58,6 +60,7 @@ namespace icon {
     constexpr auto GLOBE = "\xEF\x82\xAC";          // f0ac
     constexpr auto WRENCH = "\xEF\x82\xAD";         // f0ad
     constexpr auto LIST_CHECK = "\xEF\x82\xAE";     // f0ae
+    constexpr auto FILTER = "\xEF\x82\xB0";         // f0b0
     constexpr auto USERS = "\xEF\x83\x80";          // f0c0
     constexpr auto LINK = "\xEF\x83\x81";           // f0c1
     constexpr auto COPY = "\xEF\x83\x85";           // f0c5
@@ -76,6 +79,7 @@ namespace icon {
     constexpr auto CIRCLE_CHEVRON_LEFT = "\xEF\x84\xB7";// f137
     constexpr auto CIRCLE_PLAY = "\xEF\x85\x84";    // f144
     constexpr auto COMPASS = "\xEF\x85\x8E";        // f14e
+    constexpr auto ARROW_DOWN_WIDE_SHORT = "\xEF\x85\xA0";// f160
     constexpr auto THUMBS_UP = "\xEF\x85\xA4";      // f164
     constexpr auto THUMBS_DOWN = "\xEF\x85\xA5";    // f165
     constexpr auto MOON = "\xEF\x86\x86";           // f186
