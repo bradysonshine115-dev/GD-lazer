@@ -224,6 +224,11 @@ namespace {
         for (auto child : CCArrayExt<CCNode*>(m_main->getChildren())) {
             if (child->isVisible()) child->setVisible(false);
         }
+        // Mods add to the layer itself too (a hide-the-screen button, a death
+        // tracker): everything on it but GD's panel and this screen goes.
+        for (auto child : CCArrayExt<CCNode*>(m_layer->getChildren())) {
+            if (child != m_main && child != this && child->isVisible()) child->setVisible(false);
+        }
         if (m_statsBuilt) return;
         std::vector<Stat> stats;
         walk(m_main, [&](CCNode* node) {
@@ -513,7 +518,9 @@ namespace {
             float k = m_k;
             float h = FOOTER_HEIGHT * k;
             bool added = false;
-            for (auto item : collectModButtons(m_main)) {
+            auto found = collectModButtons(m_main);
+            for (auto item : collectModButtons(m_layer)) found.push_back(item);
+            for (auto item : found) {
                 Ref<CCMenuItem> target = item;
                 auto button = AnimatedButtonItem::create({h, h}, 10 * k, GRAY4, modButtonImage(item, h * 0.72f),
                                                          [target] { target->activate(); });

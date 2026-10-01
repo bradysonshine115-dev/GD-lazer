@@ -11,6 +11,7 @@
 - Paths: a path you haven't bought is locked until you buy it (it was looked up under the wrong item, so bought and unbought paths could swap), and the page says stars and moons, not orbs, since those are what fill a path (thanks Gecko7030 for the report)
 - Search: buttons other mods add to GD's search screen (Integrated Demonlist's, Level Grind's...) sit after refresh on the search page (thanks L4mbads for the suggestion)
 - Pause menu: more room between "paused" and the level's name, and between the song progress and the music and effects sliders (thanks L4mbads for the suggestion)
+- Fixed: buttons other mods put on GD's end-level screen itself (a hide-the-screen button, a death tracker) showed through the results screen; they're hidden and forwarded to its footer like the rest (thanks L4mbads for the report)
 - Fixed: crash on Settings > Audio > Soundtracks (thanks 1mercdev for the report)
 - Fixed: the pause menu staying up (and piling up) after unpausing with a key such as space, with Custom Keybinds (thanks 1mercdev for the report)
 - Fixed: the search page's demon kind (easy to extreme) had no effect, every demon came back (thanks TraesherHDx for the report)
