@@ -2,7 +2,13 @@
 // place of the system cursor, drawn above everything, even other mods' ImGui
 // menus (Eclipse): it's drawn last, right before the frame is shown. It shrinks and glows
 // pink while a button is held, turns to follow a drag, springs back on
-// release, and taps. It shows wherever GD would show the system cursor.
+// release, and taps. It shows wherever the system cursor would show: the
+// system one is kept hidden over the window (Win32's ShowCursor, which GLFW
+// never touches) and the cursor GLFW set, which GD and other mods change
+// through CCEGLView or GLFW itself, says whether it would be showing: none
+// at all while hidden (gameplay) or disabled (GD's "lock cursor in game").
+// That way a mod's menu over gameplay (QOLMod's, Eclipse's) leaves the
+// cursor the way vanilla would, whatever it does to put it back.
 // PC only: phones have no pointer.
 
 #include "MenuCursor.hpp"
@@ -36,9 +42,16 @@ using namespace geode::prelude;
 namespace lazer {
 
 namespace {
-    // Where GD wants the system cursor (it hides it in gameplay).
-    bool g_gdShowsCursor = true;
     bool g_enabled = false;
+    // The system cursor is hidden over the window while ours draws (a
+    // per-thread count in Windows: kept balanced).
+    bool g_systemHidden = false;
+
+    void hideSystemCursor(bool hide) {
+        if (hide == g_systemHidden) return;
+        g_systemHidden = hide;
+        ShowCursor(hide ? FALSE : TRUE);
+    }
 
     bool settingEnabled() { return Mod::get()->getSettingValue<bool>("custom-cursor"); }
     constexpr float BASE_SCALE = 0.15f;              // Cursor.base_scale
@@ -201,8 +214,7 @@ namespace {
             bool enabled = settingEnabled();
             if (enabled != g_enabled) {
                 g_enabled = enabled;
-                // Re-apply GD's wish with our cursor on or off (see the hook).
-                CCEGLView::get()->showCursor(g_gdShowsCursor);
+                hideSystemCursor(enabled);
             }
             if (!enabled) return;
 
@@ -223,12 +235,20 @@ namespace {
             }
             bool focused = window && GetForegroundWindow() == window;
 
-            // Visibility: GD's say, and only over the window (outside, the system cursor is back).
-            // GD's "lock cursor in game" pins the mouse to the middle of the
-            // window in GLFW's disabled mode, which hides the system cursor by
-            // itself, so GD never asks for it hidden: ours goes while the lock
-            // is on. The view's own flag, since showCursor clears it too.
-            bool visible = g_gdShowsCursor && !view->getCursorLocked() && inside;
+            // Visibility: whether the system cursor would be showing, and only
+            // over the window (outside, the system cursor is back). GLFW hides
+            // it (its hidden mode, for gameplay, and its disabled mode, GD's
+            // "lock cursor in game" pinning it to the middle of the window) by
+            // setting no cursor at all: a null current cursor. ShowCursor's
+            // count, ours, leaves that alone.
+            // Another mod may hide it with ShowCursor as well: its count,
+            // less our own.
+            HCURSOR current = GetCursor();
+            int count = ShowCursor(FALSE) + 1;
+            ShowCursor(TRUE);
+            int others = count - (g_systemHidden ? -1 : 0);
+            bool shown = current != nullptr && others >= 0;
+            bool visible = shown && inside;
             if (visible != m_visible) {
                 m_visible = visible;
                 if (visible) { // PopIn
@@ -496,11 +516,6 @@ class $modify(LazerCursorView, CCEGLView) {
         }
         CCEGLView::swapBuffers();
     }
-
-    void showCursor(bool state) {
-        lazer::g_gdShowsCursor = state;
-        CCEGLView::showCursor(state && !lazer::g_enabled);
-    }
 };
 
 // Only once the game has loaded (the intro is starting): the loading screen
@@ -514,7 +529,7 @@ void lazer::releaseMenuCursor() {
     g_dropped = false;
     if (g_enabled) {
         g_enabled = false;
-        CCEGLView::get()->showCursor(g_gdShowsCursor);
+        hideSystemCursor(false);
     }
 }
 

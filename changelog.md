@@ -12,6 +12,7 @@
 - Search: buttons other mods add to GD's search screen (Integrated Demonlist's, Level Grind's...) sit after refresh on the search page (thanks L4mbads for the suggestion)
 - Pause menu: more room between "paused" and the level's name, and between the song progress and the music and effects sliders (thanks L4mbads for the suggestion)
 - Fixed: buttons other mods put on GD's end-level screen itself (a hide-the-screen button, a death tracker) showed through the results screen; they're hidden and forwarded to its footer like the rest (thanks L4mbads for the report)
+- The osu! cursor shows exactly when the system cursor would: it reads the cursor GD and other mods actually set (and Windows' own hide count) instead of following GD's requests, so a mod's menu over gameplay (QOLMod, Eclipse) leaves it the way vanilla would when it closes (thanks L4mbads for the report)
 - Fixed: crash on Settings > Audio > Soundtracks (thanks 1mercdev for the report)
 - Fixed: the pause menu staying up (and piling up) after unpausing with a key such as space, with Custom Keybinds (thanks 1mercdev for the report)
 - Fixed: the search page's demon kind (easy to extreme) had no effect, every demon came back (thanks TraesherHDx for the report)
