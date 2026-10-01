@@ -214,6 +214,12 @@
 				"input": true
 			}
 		},
+		"player-icon-colors": {
+			"type": "bool",
+			"name": "Use player cube colors",
+			"description": "Use your saved primary and secondary colors for the large menu cube. Turn off for the original contrast colors. Applies next time the menu loads.",
+			"default": false
+		},
 		"background-dim": {
 			"type": "int",
 			"name": "Background dim",

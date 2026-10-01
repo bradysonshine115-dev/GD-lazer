@@ -92,6 +92,15 @@ void buildSettings(SettingsOverlay* overlay, MenuLayer* menu, MenuBackground* ba
     );
     scaleRow->setTooltip("Size of the menus. Takes effect next time the menu loads.");
     overlay->addRow(scaleRow);
+    auto iconColors = ToggleRow::create("Use player cube colors", w, k,
+        [mod] { return mod->getSettingValue<bool>("player-icon-colors"); },
+        [mod] {
+            bool value = !mod->getSettingValue<bool>("player-icon-colors");
+            mod->setSettingValue<bool>("player-icon-colors", value);
+            return value;
+        });
+    iconColors->setTooltip("Use your saved primary and secondary colors for the large cube. Turn off for the original contrast colors. Applies next time the menu loads.");
+    overlay->addRow(iconColors);
     overlay->addSubsection("Background");
     auto dimRow = SliderRow::create(
         "Background dim", w, k,
