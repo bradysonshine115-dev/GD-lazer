@@ -167,7 +167,8 @@ void PauseMenu::build() {
         desc->setColor({200, 200, 200});
         float maxW = win.width - 80 * k;
         if (desc->getScaledContentSize().width > maxW) desc->setScale(desc->getScale() * maxW / desc->getScaledContentSize().width);
-        blockH += 4 * k + INFO_SIZE * k;
+        // Clear of the title's descender (the p hangs below its baseline).
+        blockH += 12 * k + INFO_SIZE * k;
         desc->setPosition({0, -blockH / 2 + INFO_SIZE * k / 2});
         m_titleBlock->addChild(desc);
     }
@@ -372,7 +373,7 @@ void PauseMenu::layout() {
     float slidersH = m_slidersBlock->getContentSize().height;
     float room = top - footerTop;
     float rowH = PLAY_SIZE * k + CAPTION_GAP * k + CAPTION_SIZE * k;
-    float infoGap = 22 * k, slidersGap = 18 * k;
+    float infoGap = 22 * k, slidersGap = 32 * k;
     float rest = infoGap + infoH + slidersGap + slidersH;
     float needed = rowH + rest + 40 * k;
     float shrink = needed > room && needed > 0 ? std::max(0.5f, (room - rest - 40 * k) / rowH) : 1.f;
