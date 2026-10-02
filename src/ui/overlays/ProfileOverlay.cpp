@@ -428,10 +428,11 @@ float ProfileOverlay::buildActions(float y) {
              run(&ProfilePage::onRequests), score->m_friendReqCount > 0 ? accent : normal);
         pill(icon::GEAR, "settings", run(&ProfilePage::onSettings), normal);
     } else {
-        // m_friendStatus: 0 none, 1 friends, 3 / 4 request sent / received.
-        auto friendLabel = score->m_friendStatus == 1 ? "friends" : score->m_friendStatus >= 3 ? "request pending" : "add friend";
-        pill(score->m_friendStatus == 1 ? icon::USER_CHECK : icon::USER_PLUS, friendLabel,
-             run(&ProfilePage::onFriend), score->m_friendStatus == 0 ? accent : normal);
+        // m_friendReqStatus: 0 none, 1 friends, 3 / 4 request sent / received
+        // (m_friendStatus is their privacy setting for requests, not the relationship).
+        auto friendLabel = score->m_friendReqStatus == 1 ? "friends" : score->m_friendReqStatus >= 3 ? "request pending" : "add friend";
+        pill(score->m_friendReqStatus == 1 ? icon::USER_CHECK : icon::USER_PLUS, friendLabel,
+             run(&ProfilePage::onFriend), score->m_friendReqStatus == 0 ? accent : normal);
         pill(icon::ENVELOPE, "message", run(&ProfilePage::onSendMessage), normal);
         bool following = GameLevelManager::sharedState()->isFollowingUser(page->m_accountID);
         pill(following ? icon::BELL_SLASH : icon::BELL, following ? "unfollow" : "follow",
@@ -713,7 +714,7 @@ void ProfileOverlay::vote(int commentID, int accountID, bool like) {
 std::string ProfileOverlay::stateSignature() const {
     auto s = m_page->m_score;
     if (!s) return "";
-    return fmt::format("{}:{}:{}:{}:{}", s->m_friendStatus, s->m_newMsgCount, s->m_friendReqCount,
+    return fmt::format("{}:{}:{}:{}:{}", s->m_friendReqStatus, s->m_newMsgCount, s->m_friendReqCount,
                        GameLevelManager::sharedState()->isFollowingUser(m_page->m_accountID), s->m_messageState);
 }
 

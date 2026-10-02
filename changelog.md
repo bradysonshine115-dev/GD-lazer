@@ -20,6 +20,7 @@
 - Fixed: the search page's demon kind (easy to extreme) had no effect, every demon came back (thanks TraesherHDx for the report)
 - Fixed: the cursor sitting in the middle of the screen during a level with GD's lock cursor on and show cursor off (thanks Kierek3 for the report)
 - Fixed: punctuation (. , ! ? @ # and the rest) couldn't be typed into the mod's search boxes and the comment editor; GD's text field only let letters and digits through (thanks GClav and LJxG0D for the report)
+- Fixed: a profile said "add friend" for people who already are: it read their request-privacy setting as the relationship
 
 ## v0.6.0
 
