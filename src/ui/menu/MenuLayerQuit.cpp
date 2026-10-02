@@ -171,6 +171,7 @@ bool LazerMenuLayer::lazerBack() {
     if (m_fields->settings && m_fields->settings->back()) return true;
     if (m_fields->quests && m_fields->quests->back()) return true;
     if (m_fields->leaderboards && m_fields->leaderboards->back()) return true;
+    if (m_fields->friends && m_fields->friends->back()) return true;
     if (m_fields->paths && m_fields->paths->back()) return true;
     if (m_fields->achievements && m_fields->achievements->back()) return true;
     if (m_fields->stats && m_fields->stats->back()) return true;
@@ -181,6 +182,8 @@ bool LazerMenuLayer::lazerBack() {
 // GD's Enter and Space open its level select. Here they press the logo, like osu!'s Select.
 void LazerMenuLayer::keyDown(enumKeyCodes key, double timestamp) {
     auto& f = m_fields;
+    // Typing in the friends page's search box: Enter searches.
+    if (f->friends && f->friends->handleKey(key)) return;
     bool select = key == KEY_Enter || key == KEY_NumEnter || key == KEY_Space;
     if (!f->buttons || !select) return MenuLayer::keyDown(key, timestamp);
     auto intro = typeinfo_cast<lazer::IntroSequence*>(this->getChildByID("intro"_spr));

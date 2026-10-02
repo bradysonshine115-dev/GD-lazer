@@ -77,7 +77,7 @@ Windows, Android and macOS (Apple Silicon and Intel), all for GD 2.2081 and Geod
 
 **Overlays**
 - Searchable settings covering GD's options and the mod's own, including account actions (save, load, refresh login, unlink)
-- Daily chests, quests, achievements, statistics, leaderboards (top 100, friends, global, creators) and paths (every path's ranks and rewards; unlock, activate and claim)
+- Daily chests, quests, achievements, statistics, leaderboards (top 100, friends, global, creators), friends (search players by name or ID, browse your friends, open their profiles) and paths (every path's ranks and rewards; unlock, activate and claim)
 - Account card and a redesigned profile page for any player
 - GD's shops as osu!-style pages; buying goes through GD's own popup, and the shopkeeper still talks
 - A level's comments: newest or top, posting and voting, the writer's profile one tap away
