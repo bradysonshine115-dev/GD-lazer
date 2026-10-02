@@ -17,6 +17,7 @@
 - Fixed: the pause menu staying up (and piling up) after unpausing with a key such as space, with Custom Keybinds (thanks 1mercdev for the report)
 - Fixed: the search page's demon kind (easy to extreme) had no effect, every demon came back (thanks TraesherHDx for the report)
 - Fixed: the cursor sitting in the middle of the screen during a level with GD's lock cursor on and show cursor off (thanks Kierek3 for the report)
+- Fixed: punctuation (. , ! ? @ # and the rest) couldn't be typed into the mod's search boxes and the comment editor; GD's text field only let letters and digits through (thanks GClav and LJxG0D for the report)
 
 ## v0.6.0
 

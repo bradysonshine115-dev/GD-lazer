@@ -228,6 +228,8 @@ void SongSelect::buildOnlineFilter() {
         this->addChild(magnifier, 5);
         float scale = 0.8f;
         m_search = TextInput::create((searchW - 50 * k) / scale, "type to search, or a level ID", "outfit-regular.fnt"_spr);
+        // GD's own character filter drops punctuation: allow everything typeable.
+        m_search->setCommonFilter(CommonFilter::Any);
         m_search->hideBG();
         m_search->setTextAlign(TextInputAlign::Left);
         m_search->setScale(scale);

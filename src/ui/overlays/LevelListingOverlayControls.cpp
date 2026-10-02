@@ -101,6 +101,8 @@ void LevelListingOverlay::buildSearchControl() {
     float inputW = boxW - (textX - boxX) - 44 * k; // room for the cross
     char const* placeholder = m_lists ? "search your lists..." : "search your levels...";
     m_input = TextInput::create(inputW / scale, placeholder, "outfit-regular.fnt"_spr);
+    // GD's own character filter drops punctuation: allow everything typeable.
+    m_input->setCommonFilter(CommonFilter::Any);
     m_input->hideBG();
     m_input->setTextAlign(TextInputAlign::Left);
     m_input->setScale(scale);

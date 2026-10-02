@@ -189,6 +189,8 @@ float CommentsOverlay::buildEditor(float y) {
     float scale = k;
     float fieldCy = -(top + border + fieldH / 2);
     m_input = TextInput::create((ew - EDITOR_SIDE * 2 * k) / scale, "type your comment here", "outfit-regular.fnt"_spr);
+    // GD's own character filter drops punctuation: allow everything typeable.
+    m_input->setCommonFilter(CommonFilter::Any);
     m_input->hideBG();
     m_input->setTextAlign(TextInputAlign::Left);
     m_input->setScale(scale);
