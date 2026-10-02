@@ -22,7 +22,7 @@ namespace {
     constexpr float AVATAR_TILE = 48, AVATAR = 34;
     constexpr float NAME_TEXT = 17, STAT_TEXT = 13, STAT_ICON = 14;
     constexpr float BUTTON_WIDTH = 130, PAGER_WIDTH = 120;
-    constexpr int PAGE_SIZE = 10; // GD's user search pages
+    constexpr int SEARCH_PAGE = 10; // players per page of GD's user search (PAGE_SIZE is a macro on 32-bit Android)
 
     bool nodeContains(CCNode* node, CCPoint world) {
         auto local = node->convertToNodeSpace(world);
@@ -261,7 +261,7 @@ void FriendsOverlay::showUsers(CCArray* users) {
 
     bool paged = m_mode == Mode::Search;
     m_previous->setVisible(paged && m_page > 0);
-    m_next->setVisible(paged && int(m_cards.size()) >= PAGE_SIZE);
+    m_next->setVisible(paged && int(m_cards.size()) >= SEARCH_PAGE);
 
     size_t n = m_cards.size();
     auto players = fmt::format("{} player{}", n, n == 1 ? "" : "s");
