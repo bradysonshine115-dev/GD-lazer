@@ -121,6 +121,7 @@ void LazerMenuLayer::toggleStats() {
 // Full-screen overlays replace each other, like osu!'s.
 void LazerMenuLayer::closeOverlaysExcept(CCNode* keep) {
     auto& f = m_fields;
+    if (f->friends && f->friends != keep) f->friends->close();
     if (f->settings && f->settings != keep) f->settings->close();
     if (f->quests && f->quests != keep) f->quests->close();
     if (f->leaderboards && f->leaderboards != keep) f->leaderboards->close();
@@ -139,6 +140,7 @@ bool LazerMenuLayer::closeAllOverlays() {
             closed = true;
         }
     };
+    closeIf(f->friends);
     closeIf(f->settings);
     closeIf(f->quests);
     closeIf(f->leaderboards);
@@ -160,4 +162,16 @@ void LazerMenuLayer::toggleNowPlaying() {
     if (m_fields->account) m_fields->account->close();
     nowPlaying->toggle();
     if (nowPlaying->isOpen() && m_fields->ticker) m_fields->ticker->hide();
+}
+
+void LazerMenuLayer::toggleFriends() {
+    auto& friends = m_fields->friends;
+    if (!friends) {
+        friends = lazer::FriendsOverlay::create(m_fields->toolbar ? m_fields->toolbar->height() : 0);
+        if (!friends) return;
+        friends->setID("friends"_spr);
+        this->addChild(friends, 16);
+    }
+    if (friends->isOpen()) friends->close();
+    else { closeOverlaysExcept(friends); friends->open(); }
 }

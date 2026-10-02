@@ -54,6 +54,7 @@ int LazerMenuLayer::rightOrder(std::string const& id) {
         {"newgrounds-button", 20},
         {"geode.loader/geode-button", 30}, {"dankmeme.globed2/main-menu-button", 31},
     };
+    if (id == "friends") return 2;
     auto it = order.find(id);
     return it != order.end() ? it->second : 40;
 }
@@ -112,6 +113,7 @@ void LazerMenuLayer::collectToolbarButtons() {
         };
     };
     add("leaderboards", {lazer::makeIcon(icon::RANKING_STAR, 1), "leaderboards", [this] { this->toggleLeaderboards(); }});
+    add("friends", {lazer::makeIcon(icon::USER_PLUS, 1), "friends / player search", [this] { this->toggleFriends(); }});
     add("quests", {lazer::makeIcon(icon::LIST_CHECK, 1), "quests", [this] { this->toggleQuests(); }});
     add("paths", {lazer::makeIcon(icon::ROUTE, 1), "paths", [this] { this->togglePaths(); }});
     add("vault", {lazer::makeIcon(icon::VAULT, 1), "vault", [hub] {

@@ -6,6 +6,7 @@
 #include "../core/Text.hpp"
 #include "../core/Theme.hpp"
 
+#include <Geode/Geode.hpp>
 #include <Geode/binding/GameManager.hpp>
 #include <Geode/binding/SimplePlayer.hpp>
 #include <Geode/utils/cocos.hpp>
@@ -27,7 +28,10 @@ CCNode* makeLogoIcon(PlayerPalette const& palette, float size) {
     auto gm = GameManager::get();
     auto player = SimplePlayer::create(1);
     player->updatePlayerFrame(std::max(1, gm->getPlayerFrame()), IconType::Cube);
-    player->setColors(palette.iconA, palette.iconB);
+    // Match the toolbar avatar: use the saved colors, not disc contrast colors.
+    if (geode::Mod::get()->getSettingValue<bool>("player-icon-colors"))
+        player->setColors(gm->colorForIdx(gm->getPlayerColor()), gm->colorForIdx(gm->getPlayerColor2()));
+    else player->setColors(palette.iconA, palette.iconB);
     player->disableGlowOutline();
     // A cube is ~30 units tall at scale 1.
     player->setScale(size / 30.f);
